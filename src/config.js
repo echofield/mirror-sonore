@@ -1,14 +1,16 @@
 // Static configuration: modes, color directions, fader definitions, export options.
 // Everything the user can pick lives here, so adding a mode or a direction starts in this file.
 
-export const MODES = ['Mirror', 'Kaleido', 'Tunnel', 'Liquid', 'Holo', 'Fractal', 'Infinite', 'Wave'];
+export const MODES = ['Mirror', 'Kaleido', 'Tunnel', 'Liquid', 'Holo', 'Fractal', 'Infinite', 'Wave', 'VHS'];
 // Modes that use the "Folds" fader (angular symmetry count; in Wave, the number of ripples across the picture).
 export const FOLD_MODES = [1, 2, 6, 7];
 export const HOLO = 4;
 export const WAVE = 7;
+export const VHS = 8;
 // Modes Auto never picks (no direction or trip lists them). Choosing one by hand sets this starting look.
 export const HAND_MODES = {
-  7: { warp: .55, spin: .22, zoom: 1, trails: .4, seg: 6 }
+  7: { warp: .55, spin: .22, zoom: 1, trails: .4, seg: 6 },
+  8: { warp: .12, spin: 0, zoom: 1.05, trails: .3 }
 };
 
 // A direction is a color world plus the modes Auto/Shuffle may pick inside it.
@@ -118,7 +120,8 @@ export const TEX = [
   { k: 'palMix', label: 'Palette',    min: 0, max: 1, step: .01,  fmt: pct },
   { k: 'color',  label: 'Color flow', min: 0, max: 1, step: .01,  fmt: pct },
   { k: 'grain',  label: 'Grain',      min: 0, max: 1, step: .005, fmt: v => v.toFixed(3) },
-  { k: 'glow',   label: 'Glow',       min: 0, max: 1, step: .01,  fmt: pct }
+  { k: 'glow',   label: 'Glow',       min: 0, max: 1, step: .01,  fmt: pct },
+  { k: 'tape',   label: 'Tape',       min: 0, max: 1, step: .01,  fmt: pct }
 ];
 // Foil defaults follow the HoloCloth reference: holo .84, band freq 1.1, sparkle .73, noise .345.
 export const FOIL = [
@@ -139,13 +142,13 @@ export const TRIPFX = [
 
 // Every continuous parameter. V (live values) eases toward P (control values) for these keys.
 export const KEYS = ['beat', 'pump', 'flow', 'punch', 'glitch', 'warp', 'trails', 'spin', 'zoom',
-  'palMix', 'color', 'grain', 'glow', 'holo', 'bands', 'sparkle', 'bump', 'lattice', 'latScale', 'latWarp', 'echo', 'breath'];
+  'palMix', 'color', 'grain', 'glow', 'tape', 'holo', 'bands', 'sparkle', 'bump', 'lattice', 'latScale', 'latWarp', 'echo', 'breath'];
 
 export const DEFAULTS = {
   mode: 1, seg: 8,
   beat: .8, pump: .7, flow: 1,
   punch: .7, glitch: .35, warp: .25, trails: .45, spin: .22, zoom: .95,
-  palMix: .75, color: .35, grain: .28, glow: .35,
+  palMix: .75, color: .35, grain: .28, glow: .35, tape: 0,
   holo: .84, bands: 1.1, sparkle: .73, bump: .6,
   lattice: 0, latScale: 10, latWarp: .5, echo: 0, breath: 0
 };

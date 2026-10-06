@@ -172,6 +172,7 @@ export function render(now) {
   gl.useProgram(POST.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dst.t); ui1(POST, 'uTex', 0);
   u2(POST, 'uRes', rw, rh); u1(POST, 'uT', now / 1000); u1(POST, 'uGrain', U.grain); u1(POST, 'uVig', .55); u1(POST, 'uGlow', U.glow);
+  u1(POST, 'uTape', U.tape); u1(POST, 'uTapeHit', U.tapeHit);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   last = 1 - last;
 }

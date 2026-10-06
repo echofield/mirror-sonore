@@ -165,6 +165,15 @@ check($('lookBadge').textContent.includes('Wave') && !$('foldRow').hidden, 'Wave
 check(Math.max(...wv.hist) > .3, 'Wave: kicks travel through the level history (peak ' + Math.max(...wv.hist).toFixed(2) + ')');
 check(wv.tex[64 * 4] > 20 && wv.tex[64 * 4 + 3] === 255, 'Wave: the spectrum stands in the picture (bass in the middle ' + wv.tex[64 * 4] + ')');
 
+// VHS: the mode brings the tape with it; the Tape fader lays it over any other mode
+click(Array.prototype.find.call($('modes').children, b => b.textContent === 'VHS')); await run(.5);
+check($('lookBadge').textContent.includes('VHS') && w.__ms.U.tape >= .85, 'VHS mode plays the picture through the tape (tape ' + w.__ms.U.tape.toFixed(2) + ')');
+click($('modes').children[1]); await run(.3);
+check(w.__ms.U.tape < .01, 'leaving VHS takes the tape off');
+const tape = $('f-tape'); tape.value = '0.5'; tape.dispatchEvent(new w.Event('input')); await run(1);
+check(Math.abs(w.__ms.U.tape - .5) < .03, 'the Tape fader lays tape over another mode (tape ' + w.__ms.U.tape.toFixed(2) + ')');
+tape.value = '0'; tape.dispatchEvent(new w.Event('input'));
+
 // kept looks: keep one, change everything, bring it back, remove it, undo
 click($('dirs').children[2]); await run(.2);                                  // Neon
 const warp = $('f-warp'); warp.value = '0.66'; warp.dispatchEvent(new w.Event('input'));

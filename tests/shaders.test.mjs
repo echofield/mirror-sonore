@@ -86,6 +86,8 @@ rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(POST.p);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, d.t); gl.uniform1i(POST.u.uTex, 0);
     gl.uniform2f(POST.u.uRes, W, H); gl.uniform1f(POST.u.uT, f * .016); gl.uniform1f(POST.u.uGrain, D.grain); gl.uniform1f(POST.u.uVig, .55); gl.uniform1f(POST.u.uGlow, D.glow);
+    if (POST.u.uTape) gl.uniform1f(POST.u.uTape, mode === 8 ? .9 : 0);
+    if (POST.u.uTapeHit) gl.uniform1f(POST.u.uTapeHit, .6);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     last = 1 - last;
   }

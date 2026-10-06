@@ -1,8 +1,8 @@
 // GLSL ES 1.0 (WebGL1) so it runs on every phone. Two passes:
 //   MAIN  — samples the image through the current mode's coordinate transform, grades it,
 //           and blends with the previous frame (feedback trails). Renders into a ping-pong target.
-//   POST  — glow, highlight roll-off, vignette, film grain. Renders to the canvas.
-// Modes (uMode): 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite, 7 Wave.
+//   POST  — tape (VHS), glow, highlight roll-off, vignette, film grain. Renders to the canvas.
+// Modes (uMode): 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite, 7 Wave, 8 VHS.
 // Unused uniforms are fine: the renderer skips locations the compiler optimised away.
 
 export const VS = 'attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }';
@@ -119,7 +119,7 @@ void main(){
     col = gradeMap(col);
 
   } else {
-    // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite, Wave ----
+    // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite, Wave, VHS ----
     vec2 q;
     if(uMode > 0.5 && uMode < 1.5){        // Kaleido: fold before the warp so symmetry holds
       float r = length(p); float a = atan(p.y, p.x);
@@ -140,6 +140,8 @@ void main(){
     } else if(uMode < 3.5){                // Liquid
       vec2 w2 = vec2(fbm(p*1.6 + w*2.5 + uT*0.07), fbm(p*1.6 - w*2.5 - uT*0.05 + 3.1)) - 0.5;
       q = p + w2*uWarp*1.4;
+    } else if(uMode > 7.5){                // VHS: the picture played straight, held by hand; the tape is in the post pass
+      q = p + 0.012*vec2(sin(uT*0.7), cos(uT*0.53));
     } else if(uMode > 6.5){                // Wave: the picture stays in place and the music runs through it
       float x = fc.x/uRes.x;
       vec4 wv = texture2D(uWave, vec2(x, 0.5));   // r: spectrum standing in place, g: level history crossing left to right
@@ -200,11 +202,29 @@ void main(){
 `;
 
 export const postFS = prec => prec + `
-uniform sampler2D uTex; uniform vec2 uRes; uniform float uT, uGrain, uVig, uGlow;
+uniform sampler2D uTex; uniform vec2 uRes; uniform float uT, uGrain, uVig, uGlow, uTape, uTapeHit;
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float n1(float x){ float i = floor(x); float f = fract(x); f = f*f*(3.0 - 2.0*f); return mix(h21(vec2(i, 7.3)), h21(vec2(i + 1.0, 7.3)), f); }
 vec3 hot(vec2 uv){ return max(texture2D(uTex, uv).rgb - 0.62, 0.0); }
 void main(){
   vec2 uv = gl_FragCoord.xy/uRes;
+  // Tape: the picture is read back line by line, and the lines do not sit still.
+  float tt = mod(uT, 600.0);
+  float fr = floor(tt*30.0);               // tape noise changes 30 times a second
+  float ln = floor(uv.y*240.0);            // about 240 lines in a field
+  float tk = 0.0; float sw = 0.0;          // inside the tracking band; inside the head-switching zone at the bottom
+  if(uTape > 0.001){
+    float by = fract(tt*0.07 + 0.35*n1(tt*0.4));            // the tracking band drifts up the picture
+    tk = 1.0 - smoothstep(0.0, 0.06, abs(uv.y - by));
+    sw = 1.0 - smoothstep(0.0, 0.028, uv.y);
+    float jit = h21(vec2(ln, mod(fr, 89.0))) - 0.5;         // line jitter
+    float off = jit*0.0022*(1.0 + 6.0*uTapeHit)
+              + (n1(uv.y*3.0 + tt*1.3) - 0.5)*0.007          // slow time-base wobble
+              + tk*(0.018 + 0.06*uTapeHit)*(n1(uv.y*40.0 + tt*12.0) - 0.3)
+              + sw*0.05*(0.4 + n1(tt*9.0));
+    uv.x += off*uTape;
+    uv.y += uTape*uTapeHit*0.008*(n1(tt*40.0) - 0.5);       // the picture hops on hits
+  }
   vec3 c = texture2D(uTex, uv).rgb;
   if(uGlow > 0.001){                       // stochastic 8-tap glow on the bright parts
     vec2 px = 1.0/uRes;
@@ -218,6 +238,24 @@ void main(){
       g += hot(uv + vec2(cos(ang), sin(ang))*rad*px);
     }
     c += g*uGlow*0.42;
+  }
+  if(uTape > 0.001){
+    // colour is carried at a fraction of the picture's sharpness, and lands a little to the right
+    float w = 0.0055;
+    vec3 a = texture2D(uTex, uv - vec2(w, 0.0)).rgb;
+    vec3 b = texture2D(uTex, uv + vec2(w, 0.0)).rgb;
+    vec3 d = texture2D(uTex, uv + vec2(2.2*w, 0.0)).rgb;
+    float y = dot(mix(c, 0.5*(a + b), 0.3), vec3(0.299, 0.587, 0.114));
+    vec3 ch = (a + b + d)/3.0;
+    vec3 t3 = vec3(y) + (ch - dot(ch, vec3(0.299, 0.587, 0.114)))*0.9;
+    t3 = t3*vec3(0.93, 0.9, 0.97)*0.92 + vec3(0.05, 0.048, 0.07);                 // lifted blacks, soft whites, a cool cast
+    t3 *= 1.0 - 0.13*(0.5 + 0.5*cos(gl_FragCoord.y/uRes.y*240.0*6.2831853));     // scanlines
+    float cx = gl_FragCoord.x/uRes.x;
+    t3 += tk*0.5*step(0.7, h21(vec2(floor(cx*180.0) + mod(fr*7.0, 61.0), ln + mod(fr*3.0, 53.0))));    // snow in the tracking band
+    float dr = step(0.94 - 0.05*uTapeHit, h21(vec2(floor(cx*36.0) + mod(fr*5.0, 47.0), ln)))*step(0.93, h21(vec2(ln + mod(fr, 71.0), floor(cx*36.0))));
+    t3 += dr*0.6;                                                                 // dropouts: short white streaks
+    t3 = mix(t3, vec3(h21(vec2(floor(cx*160.0) + mod(fr*11.0, 67.0), ln))), sw*0.65);
+    c = mix(c, t3, uTape);
   }
   vec3 over = max(c - 0.78, 0.0);          // soft highlight roll-off instead of clipping
   c = min(c, 0.78) + 0.22*(1.0 - exp(-over/0.22));

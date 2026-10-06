@@ -5,7 +5,7 @@
 //   V.flow — continuous motion driven by the music
 // Pump is the only place the kick or bass moves zoom and brightness, so Pump Off means no pumping.
 import { A, S, V, P, U, G, BEAT, PUMP, WV, WAVE_N } from './state.js';
-import { KEYS, HOLO, WAVE, PUMP_LENGTHS, ECHO_RATES } from './config.js';
+import { KEYS, HOLO, WAVE, VHS, PUMP_LENGTHS, ECHO_RATES } from './config.js';
 
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -96,6 +96,10 @@ export function step(dt) {
   U.jx = jr * Math.cos(S.jul); U.jy = jr * Math.sin(S.jul);
   U.grain = V.grain * (.75 + .7 * ht + .3 * hi);
   U.glow = V.glow * (.6 + .8 * drop) * (1 + Math.max(0, pm.b) * 3);   // glow pulses only with Punch/Breathe pumping
+
+  // Tape: the amount is the Tape fader, or the VHS mode itself. Hits make the tape jump and tear.
+  U.tape = P.mode === VHS ? Math.max(V.tape, .85) : V.tape;
+  U.tapeHit = clamp(.9 * sn + .5 * k + drop + cut);
 
   // Wave: the level enters on the left and crosses the picture in one bar, while the spectrum stands
   // in place (bass in the middle, top end at the edges). Warp sets the height, Spin slides the picture sideways.
