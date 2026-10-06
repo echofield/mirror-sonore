@@ -1,0 +1,2390 @@
+<title>Miroir Sonore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the monitor is the hero. Desktop: monitor + live controls on the left, fader rack on the right.
+   Phone: monitor and live controls pinned at the top side by side, tabbed rack scrolling below.
+   Full screen: the picture fills the screen, live controls float over it and hide while playing. */
+:root{
+  --ink:#0c0d13;
+  --panel:#15161f;
+  --raise:#1e1f2b;
+  --line:#2c2d3d;
+  --bone:#efe8dc;
+  --dim:#9a97ab;
+  --phos:#ff5cc8;
+  --rec:#ff4458;
+  --glow:rgba(255,92,200,.32);
+  --shade:rgba(6,6,10,.5);
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --f-ui:"Hanken Grotesk","Helvetica Neue",Arial,system-ui,sans-serif;
+  --f-mono:"Martian Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --ar:9/16;
+  --arn:.5625;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{background:var(--ink);color:var(--bone)}
+body{margin:0;font-family:var(--f-ui);font-size:15px;line-height:1.45;padding-inline:16px;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-user-select:none;user-select:none}
+button:disabled{cursor:not-allowed;opacity:.42}
+:focus-visible{outline:2px solid var(--phos);outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+svg{display:block}
+
+.app{max-width:1240px;margin:0 auto;padding-block:18px 56px;display:grid;gap:18px 32px;grid-template-columns:minmax(0,1fr) 352px;grid-template-areas:"head head" "stage rack";align-items:start}
+
+/* header */
+.head{grid-area:head;display:flex;align-items:flex-end;justify-content:space-between;gap:8px 20px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.mark{margin:0;font-family:var(--f-display);font-weight:800;font-size:clamp(28px,4.4vw,44px);line-height:.95;letter-spacing:-.03em;font-variation-settings:"opsz" 96;text-wrap:balance}
+.mark span{color:var(--phos)}
+.tag{margin:8px 0 0;color:var(--dim);font-size:14px;max-width:56ch}
+.spec{margin:0;font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* stage */
+.stage{grid-area:stage;display:flex;flex-direction:column;align-items:center;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);min-width:0}
+.monitor{position:relative;width:min(100%,max(240px,calc((100vh - 300px) * var(--arn))));aspect-ratio:var(--ar);background:#000;border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px var(--line),0 40px 90px -40px var(--glow);cursor:pointer;touch-action:manipulation}
+.monitor canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bigplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:10px;padding:12px 20px 12px 16px;border:1px solid rgba(239,232,220,.35);border-radius:999px;background:var(--shade);color:var(--bone);font-weight:600;font-size:15px;white-space:nowrap;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.bigplay svg{width:18px;height:18px}
+.recbadge{position:absolute;left:10px;top:10px;display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:6px;background:var(--shade);font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.recbadge i{width:8px;height:8px;border-radius:50%;background:var(--rec);animation:blink 1s steps(2,start) infinite}
+@keyframes blink{to{visibility:hidden}}
+.recbar{position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--shade)}
+.recbar i{display:block;height:100%;width:100%;background:var(--rec);transform-origin:left;transform:scaleX(0)}
+.lookbadge{position:absolute;right:10px;top:10px;max-width:calc(100% - 20px);padding:5px 9px;border-radius:6px;background:var(--shade);font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--bone);pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .25s}
+
+/* TikTok safe-zone guide (approximate) */
+.safe{position:absolute;inset:0;pointer-events:none}
+.safe i{position:absolute;background:rgba(0,0,0,.42);outline:1px dashed rgba(239,232,220,.55);outline-offset:-1px}
+.safe .s-top{left:0;right:0;top:0;height:9%}
+.safe .s-bot{left:0;right:0;bottom:0;height:21%}
+.safe .s-rail{right:0;top:36%;width:15%;height:43%}
+.safe span{position:absolute;left:10px;bottom:calc(21% + 8px);font-family:var(--f-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--bone);opacity:.8}
+
+/* live controls next to the monitor */
+.side{width:min(100%,520px);display:flex;flex-direction:column;gap:12px;min-width:0}
+.transport{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
+.pbtn{width:46px;height:46px;border-radius:50%;border:0;background:var(--bone);color:var(--ink);display:grid;place-items:center}
+.pbtn svg{width:18px;height:18px}
+.scrub{min-width:0}
+.times{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:-3px}
+.macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 18px}
+.macro{min-width:0}
+.mh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:-4px}
+.mh label{font-size:13.5px;font-weight:600}
+.mh output{font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.quick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.qbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px 6px 10px;font-size:13px;font-weight:600}
+.qbtn:hover{border-color:var(--dim)}
+.qbtn svg{width:15px;height:15px}
+.leds{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.led{display:flex;gap:6px;align-items:center;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;color:var(--dim)}
+.led em{width:8px;height:8px;border-radius:50%;background:var(--phos);opacity:.15}
+.bpm{margin-left:auto;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:center}
+.meter{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}
+.meter span{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;color:var(--dim)}
+.meter b{height:4px;background:var(--line);border-radius:2px;overflow:hidden;display:block}
+.meter i{display:block;height:100%;background:var(--bone);transform-origin:left;transform:scaleX(0)}
+.mini,.mini-rec,.exitfs,.tabs{display:none}
+
+/* switch */
+.switch{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px 5px 5px;font-weight:600;font-size:13px}
+.switch i{width:30px;height:18px;border-radius:999px;background:var(--line);position:relative;flex:none}
+.switch i::after{content:"";position:absolute;left:3px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--dim);transition:transform .15s}
+.switch[aria-pressed="true"]{border-color:var(--phos)}
+.switch[aria-pressed="true"] i{background:var(--phos)}
+.switch[aria-pressed="true"] i::after{transform:translateX(12px);background:var(--ink)}
+
+/* range inputs styled as console faders */
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;margin:0;--fill:50%;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:2px;border-radius:1px;background:linear-gradient(to right,var(--phos) 0 var(--fill),var(--line) var(--fill) 100%)}
+input[type=range]::-moz-range-track{height:2px;border-radius:1px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:2px;background:var(--phos)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:22px;margin-top:-10px;border-radius:3px;border:0;background:linear-gradient(to bottom,var(--bone) 0 44%,var(--ink) 44% 56%,var(--bone) 56%);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+input[type=range]::-moz-range-thumb{width:12px;height:22px;border-radius:3px;border:0;background:linear-gradient(to bottom,var(--bone) 0 44%,var(--ink) 44% 56%,var(--bone) 56%);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+input[type=range]:focus-visible{outline-offset:4px}
+
+/* rack */
+.rack{grid-area:rack;display:flex;flex-direction:column;gap:18px;min-width:0}
+.sec{display:flex;flex-direction:column;gap:12px;padding-bottom:20px;border-bottom:1px solid var(--line);min-width:0}
+.sec:last-child{border-bottom:0;padding-bottom:0}
+.lab{margin:0;font-family:var(--f-mono);font-weight:500;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.sublab{margin:6px 0 0;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--phos)}
+.note{margin:0;font-size:13px;color:var(--dim)}
+
+.src{display:grid;gap:8px}
+.tile{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 12px 8px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer}
+.tile:hover{border-color:var(--dim)}
+.tile:focus-within{outline:2px solid var(--phos);outline-offset:2px}
+.thumb,.wave{width:48px;height:48px;border-radius:6px;background:var(--raise);display:block}
+.wave{display:grid;place-items:center;color:var(--phos)}
+.wave svg{width:28px;height:28px}
+.tile-txt{display:flex;flex-direction:column;min-width:0}
+.tile-txt b{font-weight:600;font-size:14px}
+.tile-txt span{font-size:13px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile-act{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--bone);padding:6px 10px;border:1px solid var(--line);border-radius:6px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px 5px 6px;font-size:13px;font-weight:500}
+.sw{width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);flex:none}
+.chip[aria-pressed="true"]{border-color:var(--bone);background:var(--raise)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px;background:var(--panel)}
+.seg button{border:0;background:transparent;border-radius:5px;padding:7px 2px;font-size:13px;font-weight:500;color:var(--dim);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--bone);color:var(--ink)}
+.seg.sm button{font-family:var(--f-mono);font-size:11px;padding:6px 2px}
+.modegrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.modegrid button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 2px;font-size:13px;font-weight:500;color:var(--dim)}
+.modegrid button[aria-pressed="true"]{background:var(--bone);border-color:var(--bone);color:var(--ink)}
+
+.faders{display:grid}
+.fader{display:grid;grid-template-columns:5.6em minmax(0,1fr) 4.4em;gap:10px;align-items:center}
+.fader label{font-size:13.5px;color:var(--bone)}
+.fader output{font-family:var(--f-mono);font-size:11px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+.opt{display:grid;grid-template-columns:5.6em minmax(0,1fr);gap:10px;align-items:center}
+.opt > span{font-size:13.5px}
+.check{display:flex;gap:10px;align-items:center;font-size:13.5px;cursor:pointer}
+.check input{width:16px;height:16px;accent-color:var(--phos)}
+
+.recbtn{display:flex;align-items:center;justify-content:center;gap:10px;height:52px;border:0;border-radius:10px;background:var(--bone);color:var(--ink);font-weight:700;font-size:16px}
+.recbtn i{width:12px;height:12px;border-radius:50%;background:var(--rec)}
+.recbtn.on{background:var(--rec)}
+.recbtn.on i{border-radius:2px;background:var(--ink)}
+
+.results{display:grid;gap:8px}
+.result{display:grid;grid-template-columns:84px minmax(0,1fr);gap:14px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);align-items:start}
+.result video{width:84px;aspect-ratio:var(--ar);max-width:100%;border-radius:6px;background:#000;object-fit:cover;display:block}
+.res-meta{display:flex;flex-direction:column;gap:6px;min-width:0}
+.res-meta b{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-meta small{font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.savebtn{margin-top:4px;align-self:start;border:0;border-radius:8px;background:var(--phos);color:var(--ink);font-weight:700;padding:9px 16px}
+.keys{margin:0;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);letter-spacing:.04em}
+
+.drop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(12,13,19,.86);border:2px dashed var(--phos)}
+.drop p{margin:0;font-family:var(--f-display);font-weight:800;font-size:clamp(26px,5vw,48px);letter-spacing:-.02em}
+.toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));max-width:min(92vw,460px);padding:10px 16px;border-radius:10px;background:var(--raise);border:1px solid var(--line);font-size:14px}
+.err{padding:16px;margin:12px;border:1px solid var(--rec);border-radius:10px}
+
+/* ---------- phone: pinned studio ---------- */
+@media (max-width:880px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "stage" "rack";gap:0;padding-block:10px 64px}
+  .head{padding-bottom:10px}
+  .tag{display:none}
+  .mark{font-size:24px}
+  .stage{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;margin-inline:-16px;padding:10px 16px 0;background:var(--ink);border-bottom:1px solid var(--line);
+         display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"mon side" "tabs tabs";gap:10px 12px;align-items:start}
+  .monitor{grid-area:mon;width:auto;height:min(42vh,calc(54vw / var(--arn)));border-radius:10px}
+  @supports (height:1svh){ .monitor{height:min(42svh,calc(54vw / var(--arn)))} }
+  .side{grid-area:side;width:auto;gap:6px}
+  .transport{gap:8px}
+  .pbtn{width:38px;height:38px}
+  .pbtn svg{width:15px;height:15px}
+  .macros{grid-template-columns:minmax(0,1fr);gap:0}
+  .mh label{font-size:12.5px}
+  .quick{gap:6px}
+  .qbtn,.switch{font-size:12px}
+  .qbtn{padding:5px 9px 5px 8px}
+  #fsBtn{font-size:0;gap:0;padding:6px}
+  #fsBtn svg{width:16px;height:16px}
+  .leds{gap:4px 9px}
+  .led{font-size:8px;letter-spacing:.06em;gap:4px}
+  .bpm{font-size:9.5px;margin-left:0}
+  .meters,.keys{display:none}
+  .tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-inline:-16px;border-top:1px solid var(--line)}
+  .tabs button{border:0;background:transparent;padding:12px 2px 10px;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent}
+  .tabs button[aria-selected="true"]{color:var(--bone);border-bottom-color:var(--phos)}
+  .rack{padding-top:16px}
+  .rack .sec{display:none;border-bottom:0;padding-bottom:0}
+  .rack .sec > .lab{display:none}
+  .rack[data-tab="sources"] .sec[data-tab="sources"],
+  .rack[data-tab="direction"] .sec[data-tab="direction"],
+  .rack[data-tab="look"] .sec[data-tab="look"],
+  .rack[data-tab="color"] .sec[data-tab="color"],
+  .rack[data-tab="export"] .sec[data-tab="export"]{display:flex}
+}
+
+/* ---------- full screen ---------- */
+body.immersive{overflow:hidden}
+body.immersive .stage{position:fixed;inset:0;z-index:40;margin:0;padding:0;border:0;background:#000;display:block;top:0}
+body.immersive .monitor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:auto;max-width:none;height:min(100vh,calc(100vw / var(--arn)));border-radius:0;box-shadow:none;cursor:default}
+@supports (height:1dvh){ body.immersive .monitor{height:min(100dvh,calc(100vw / var(--arn)))} }
+body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.8) 38%);gap:10px;transition:opacity .25s}
+body.immersive .side > *{width:100%;max-width:640px;margin-inline:auto}
+body.immersive .macros{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+body.immersive .mini::-webkit-scrollbar{display:none}
+body.immersive .mini-rec{display:flex;height:44px;font-size:15px}
+body.immersive .exitfs{display:flex}
+body.immersive .tabs,body.immersive .meters,body.immersive #fsBtn,body.immersive .bpm{display:none}
+body.immersive.ui-off .side,body.immersive.ui-off .exitfs,body.immersive.ui-off .lookbadge{opacity:0;pointer-events:none}
+body.immersive.ui-off{cursor:none}
+.mini button{flex:none;border:1px solid rgba(239,232,220,.25);background:rgba(20,21,31,.62);border-radius:999px;padding:5px 11px 5px 6px;font-size:12.5px;font-weight:500;color:var(--bone);display:inline-flex;gap:6px;align-items:center}
+#miniModes button{padding-left:11px}
+.mini button[aria-pressed="true"]{background:var(--bone);border-color:var(--bone);color:var(--ink)}
+.mini .sw{width:13px;height:13px}
+.exitfs{position:absolute;z-index:2;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(239,232,220,.35);background:var(--shade);color:var(--bone);align-items:center;justify-content:center;transition:opacity .25s}
+.exitfs svg{width:16px;height:16px}
+body.immersive .lookbadge{top:calc(14px + env(safe-area-inset-top,0px));right:auto;left:12px}
+body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top,0px))}
+
+@media (prefers-reduced-motion:reduce){.recbadge i{animation:none}.switch i::after,.side,.exitfs,.lookbadge{transition:none}}
+</style>
+
+<div class="app">
+  <header class="head">
+    <div>
+      <h1 class="mark">Miroir <span>Sonore</span></h1>
+      <p class="tag">Drop an image and a sound. Pick a direction, let Auto change the look on the beat, and record vertical clips for TikTok.</p>
+    </div>
+    <p class="spec" id="spec">720 × 1280 · 30 fps</p>
+  </header>
+
+  <section class="stage" id="stage" aria-label="Preview">
+    <div class="monitor" id="monitor">
+      <canvas id="view" width="720" height="1280" aria-label="Live visual preview"></canvas>
+      <div class="safe" id="safe" hidden><i class="s-top"></i><i class="s-bot"></i><i class="s-rail"></i><span>Covered by TikTok UI</span></div>
+      <span class="lookbadge" id="lookBadge">Picture · Kaleido</span>
+      <button class="bigplay" id="bigPlay" type="button" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l12 7-12 7z" fill="currentColor"/></svg>
+        <span id="bigPlayLbl">Loading…</span>
+      </button>
+      <div class="recbadge" id="recBadge" hidden><i></i><span id="recTime">REC 0:00 / 0:15</span></div>
+      <div class="recbar" id="recBar" hidden><i id="recFill"></i></div>
+    </div>
+    <button class="exitfs" id="exitFs" type="button" aria-label="Exit full screen">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+
+    <div class="side" id="side">
+      <div class="transport">
+        <button class="pbtn" id="playBtn" type="button" aria-label="Play" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path id="playIcon" d="M5 3l12 7-12 7z" fill="currentColor"/></svg>
+        </button>
+        <div class="scrub">
+          <input id="scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in the track">
+          <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+        </div>
+      </div>
+      <div class="macros" id="macros"></div>
+      <div class="quick">
+        <button class="switch" id="autoT" type="button" aria-pressed="true"><i></i>Auto</button>
+        <button class="qbtn" id="shuffle" type="button">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 3l1 2c1 2 2 3 4 3H17M14.5 11.5 17 14l-2.5 2.5M3 14h3.5c1.2 0 2-.4 2.7-1.1M11.8 7.1C12.5 6.4 13.3 6 14.5 6H17M14.5 3.5 17 6l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Shuffle
+        </button>
+        <button class="qbtn" id="fsBtn" type="button">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Full screen
+        </button>
+      </div>
+      <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
+      <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
+      <button class="recbtn mini-rec" id="recMini" type="button" disabled><i></i><span id="recMiniLbl">Record 15s</span></button>
+      <div class="leds" aria-hidden="true">
+        <span class="led"><em id="lKick"></em>KICK</span>
+        <span class="led"><em id="lSnare"></em>SNARE</span>
+        <span class="led"><em id="lHat"></em>HAT</span>
+        <span class="led"><em id="lDrop"></em>DROP</span>
+        <span class="bpm" id="bpm">— BPM</span>
+      </div>
+      <div class="meters" aria-hidden="true">
+        <div class="meter"><span>LOW</span><b><i id="mLow"></i></b></div>
+        <div class="meter"><span>MID</span><b><i id="mMid"></i></b></div>
+        <div class="meter"><span>HIGH</span><b><i id="mHigh"></i></b></div>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs" aria-label="Controls">
+      <button type="button" data-tab="sources">Sources</button>
+      <button type="button" data-tab="direction">Direction</button>
+      <button type="button" data-tab="look">Look</button>
+      <button type="button" data-tab="color">Color</button>
+      <button type="button" data-tab="export">Export</button>
+    </nav>
+  </section>
+
+  <aside class="rack" id="rack" data-tab="sources">
+    <section class="sec" data-tab="sources">
+      <h2 class="lab">Sources</h2>
+      <div class="src">
+        <label class="tile" for="imgIn">
+          <canvas class="thumb" id="thumb" width="96" height="96"></canvas>
+          <span class="tile-txt"><b>Image</b><span id="imgName">Sample image (generated)</span></span>
+          <span class="tile-act">Choose</span>
+          <input class="vh" id="imgIn" type="file" accept="image/*">
+        </label>
+        <label class="tile" for="sndIn">
+          <span class="wave"><svg viewBox="0 0 28 28" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 11v6M9 7v14M14 4v20M19 9v10M24 12v4"/></g></svg></span>
+          <span class="tile-txt"><b>Sound</b><span id="sndName">Preparing sample loop…</span></span>
+          <span class="tile-act">Choose</span>
+          <input class="vh" id="sndIn" type="file" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
+        </label>
+      </div>
+      <p class="note">Or drag files anywhere onto the page. A video file works as a sound source too.</p>
+    </section>
+
+    <section class="sec" data-tab="direction">
+      <h2 class="lab">Direction</h2>
+      <div class="chips" id="dirs" role="group" aria-label="Direction"></div>
+      <p class="note">Picture takes its colors from your image. Original keeps the image exactly as it is. The others repaint it.</p>
+      <div class="opt"><span>Auto every</span><div class="seg sm" id="bars" role="group" aria-label="Change the look every"></div></div>
+      <div class="opt"><span>Transition</span><div class="seg sm" id="trans" role="group" aria-label="Transition"></div></div>
+      <p class="note" id="autoNote"></p>
+    </section>
+
+    <section class="sec" data-tab="look">
+      <h2 class="lab">Look</h2>
+      <div class="modegrid" id="modes" role="group" aria-label="Mode"></div>
+      <div class="fader" id="foldRow">
+        <label for="segIn">Folds</label>
+        <input id="segIn" type="range" min="2" max="16" step="1">
+        <output id="segOut" for="segIn"></output>
+      </div>
+      <div class="faders" id="feel"></div>
+    </section>
+
+    <section class="sec" data-tab="color">
+      <h2 class="lab">Color &amp; texture</h2>
+      <div class="faders" id="tex"></div>
+      <div id="foilWrap">
+        <p class="sublab">Foil · Holo mode</p>
+        <div class="faders" id="foil"></div>
+      </div>
+    </section>
+
+    <section class="sec" data-tab="export">
+      <h2 class="lab">Export</h2>
+      <div class="opt"><span>Format</span><div class="seg sm" id="fmts" role="group" aria-label="Format"></div></div>
+      <div class="opt"><span>Quality</span><div class="seg sm" id="quals" role="group" aria-label="Quality"></div></div>
+      <div class="opt"><span>Length</span><div class="seg sm" id="lens" role="group" aria-label="Length"></div></div>
+      <div class="opt"><span>Clips</span><div class="seg sm" id="clips" role="group" aria-label="Number of clips"></div></div>
+      <label class="check" id="safeWrap"><input type="checkbox" id="safeT"> Show TikTok safe zone</label>
+      <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
+      <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
+      <div class="results" id="results"></div>
+      <p class="keys">Space play · R record · S shuffle · A auto · F full screen · 1–7 modes</p>
+    </section>
+  </aside>
+</div>
+
+<div class="drop" id="drop" hidden><p>Drop an image or a sound</p></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script>
+(() => {
+  // src/config.js
+  var MODES = ["Mirror", "Kaleido", "Tunnel", "Liquid", "Holo", "Fractal", "Infinite"];
+  var FOLD_MODES = [1, 2, 6];
+  var HOLO = 4;
+  var DIRS = {
+    Picture: { pal: null, mix: 0.75, modes: [1, 6, 0, 3, 5, 2, 4], grain: 0.28, glow: 0.35, color: 0.35 },
+    Original: {
+      pal: ["#0b0c12", "#4a4d5c", "#a9a6b6", "#f4efe6"],
+      mix: 0,
+      modes: [1, 0, 6, 3, 5, 2],
+      grain: 0.26,
+      glow: 0.3,
+      color: 0.25,
+      sw: "conic-gradient(#ff4fa3,#ffaa3c,#3fd7c6,#7a5cff,#ff4fa3)"
+    },
+    Neon: { pal: ["#07040f", "#5d17ff", "#ff2fa8", "#2de2ff"], mix: 0.82, modes: [1, 2, 6, 5, 3, 0], grain: 0.28, glow: 0.6, color: 0.5 },
+    Holo: { pal: ["#0b0c12", "#7fd6ff", "#ff9de2", "#fff3b0"], mix: 0.2, modes: [4, 4, 5, 1, 6], grain: 0.345, glow: 0.2, color: 0.35 },
+    Gold: { pal: ["#050403", "#5a2a06", "#e8a032", "#fff3cf"], mix: 0.95, modes: [1, 0, 5, 6, 4], grain: 0.32, glow: 0.5, color: 0.3 },
+    Ink: { pal: ["#050506", "#26262b", "#b9b3a7", "#f4efe6"], mix: 1, modes: [0, 3, 5, 0, 6], grain: 0.6, glow: 0.08, color: 0.12 },
+    Dream: { pal: ["#160c28", "#8a5cff", "#ffb3d9", "#d2f6ff"], mix: 0.75, modes: [3, 6, 1, 4, 0], grain: 0.25, glow: 0.45, color: 0.45, soft: true },
+    Ember: { pal: ["#030101", "#7a0d02", "#ff4a12", "#ffd27a"], mix: 0.85, modes: [2, 6, 1, 5, 3], grain: 0.35, glow: 0.6, color: 0.4 }
+  };
+  var DEFAULT_DIR = "Picture";
+  var pct = (v) => Math.round(v * 100) + "%";
+  var x2 = (v) => v.toFixed(2);
+  var MACROS = [
+    { k: "beat", label: "Beat", min: 0, max: 1.5, step: 0.01, fmt: pct, hint: "Strength of hits on kicks, snares and drops" },
+    { k: "flow", label: "Flow", min: 0, max: 1.5, step: 0.01, fmt: pct, hint: "How much the music drives continuous motion" }
+  ];
+  var FEEL = [
+    { k: "punch", label: "Punch", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "glitch", label: "Glitch", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "warp", label: "Warp", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "trails", label: "Trails", min: 0, max: 0.95, step: 0.01, fmt: pct },
+    { k: "spin", label: "Spin", min: -1, max: 1, step: 0.01, fmt: (v) => (v > 0 ? "+" : "") + v.toFixed(2) },
+    { k: "zoom", label: "Zoom", min: 0.5, max: 3, step: 0.01, fmt: (v) => v.toFixed(2) + "\xD7" }
+  ];
+  var TEX = [
+    { k: "palMix", label: "Palette", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "color", label: "Color flow", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "grain", label: "Grain", min: 0, max: 1, step: 5e-3, fmt: (v) => v.toFixed(3) },
+    { k: "glow", label: "Glow", min: 0, max: 1, step: 0.01, fmt: pct }
+  ];
+  var FOIL = [
+    { k: "holo", label: "Holo", min: 0, max: 1, step: 0.01, fmt: x2 },
+    { k: "bands", label: "Bands", min: 0.3, max: 3, step: 0.01, fmt: x2 },
+    { k: "sparkle", label: "Sparkle", min: 0, max: 1, step: 0.01, fmt: x2 },
+    { k: "bump", label: "Scratches", min: 0, max: 1, step: 0.01, fmt: x2 }
+  ];
+  var KEYS = [
+    "beat",
+    "flow",
+    "punch",
+    "glitch",
+    "warp",
+    "trails",
+    "spin",
+    "zoom",
+    "palMix",
+    "color",
+    "grain",
+    "glow",
+    "holo",
+    "bands",
+    "sparkle",
+    "bump"
+  ];
+  var DEFAULTS = {
+    mode: 1,
+    seg: 8,
+    beat: 0.8,
+    flow: 1,
+    punch: 0.7,
+    glitch: 0.35,
+    warp: 0.25,
+    trails: 0.45,
+    spin: 0.22,
+    zoom: 0.95,
+    palMix: 0.75,
+    color: 0.35,
+    grain: 0.28,
+    glow: 0.35,
+    holo: 0.84,
+    bands: 1.1,
+    sparkle: 0.73,
+    bump: 0.6
+  };
+  var FORMATS = { "9:16": [9, 16], "1:1": [1, 1], "4:5": [4, 5] };
+  var QUALS = { "720p": 720, "1080p": 1080 };
+  var LENS = { "15s": 15, "30s": 30, "60s": 60, "Full": 0 };
+  var CLIPS = [1, 3, 5];
+  var BARS = [4, 8, 16];
+  var TRANSITIONS = ["Morph", "Cut"];
+
+  // src/state.js
+  var P = { ...DEFAULTS };
+  var V = { ...DEFAULTS };
+  var S = {
+    t: 0,
+    rot: 0,
+    rotV: 0,
+    drift: 0,
+    tun: 0,
+    jul: 0,
+    hue: 0,
+    hueT: 0,
+    hueKick: 0,
+    palPhase: 0,
+    palTarget: 0,
+    seed: Math.random() * 100,
+    sliceSeed: 0,
+    tiltPh: 0,
+    poke: [0, 0, 9],
+    // holo ripple: x, y, age in seconds
+    morph: 0
+    // 1 right after a Morph transition, decays to 0
+  };
+  var A = {
+    low: 0,
+    mid: 0,
+    high: 0,
+    lvl: 0,
+    kick: 0,
+    snare: 0,
+    hat: 0,
+    drop: 0,
+    cut: 0,
+    eFast: 0,
+    eSlow: 0,
+    lastDrop: -99,
+    playT: 0,
+    pk: [0.2, 0.2, 0.2, 0.2]
+  };
+  var BEAT = { iois: [], last: -9, period: 0.5, bpm: 0 };
+  var AUTO = { on: true, bars: 4, armed: false, armedAt: 0, phraseStart: 0, trans: "Morph" };
+  var OUT = { fmt: "9:16", q: "720p", len: "15s", clips: 1 };
+  var SESSION = { active: false, total: 1, done: 0, start: 0, cancel: false, stream: null };
+  var U = {};
+  var G = {
+    clock: 0,
+    // seconds of playback (only advances while audio plays)
+    easeTau: 0.08,
+    // how fast V follows P; Auto raises it for gliding changes
+    dir: DEFAULT_DIR,
+    pal: [[0, 0, 0], [0.3, 0.3, 0.3], [0.6, 0.6, 0.6], [1, 1, 1]],
+    bg: [0.043, 0.047, 0.07],
+    picturePal: null,
+    // { rgb: [[r,g,b]×4], css: 'linear-gradient(...)' } from the loaded image
+    reduced: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
+    W: 720,
+    H: 1280,
+    // output size (what gets recorded)
+    scale: 1,
+    // preview render scale (adaptive; forced to 1 while recording)
+    imgAspect: 1
+  };
+
+  // src/gl/shaders.js
+  var VS = "attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }";
+  var mainFS = (prec) => prec + `
+uniform sampler2D uImg; uniform sampler2D uPrev;
+uniform vec2 uRes; uniform vec2 uDrift; uniform vec2 uTilt; uniform vec2 uJulia;
+uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform vec3 uBg; uniform vec3 uPoke;
+uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
+uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp;
+
+float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
+  return mix(mix(h21(i), h21(i+vec2(1.0,0.0)), u.x), mix(h21(i+vec2(0.0,1.0)), h21(i+vec2(1.0,1.0)), u.x), u.y); }
+float fbm(vec2 p){ float s = 0.0; float a = 0.5; for(int i=0;i<4;i++){ s += a*vnoise(p); p = p*2.03 + vec2(1.7, 9.2); a *= 0.5; } return s; }
+mat2 rot(float a){ float c = cos(a); float s = sin(a); return mat2(c, -s, s, c); }
+vec2 mr(vec2 u){ return abs(mod(u + 1.0, 2.0) - 1.0); }   // mirrored repeat, never shows an edge
+vec3 hueRot(vec3 c, float a){
+  const mat3 toY = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
+  const mat3 toR = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
+  vec3 y = toY*c; float cs = cos(a); float sn = sin(a);
+  y.yz = mat2(cs, -sn, sn, cs)*y.yz; return toR*y; }
+// Cyclic 4-stop palette: 0 \u2192 P0 \u2026 0.75 \u2192 P3 \u2026 1 \u2192 back to P0.
+vec3 pal(float t){
+  t = fract(t)*4.0;
+  vec3 c = mix(uP0, uP1, smoothstep(0.0, 1.0, clamp(t, 0.0, 1.0)));
+  c = mix(c, uP2, smoothstep(0.0, 1.0, clamp(t-1.0, 0.0, 1.0)));
+  c = mix(c, uP3, smoothstep(0.0, 1.0, clamp(t-2.0, 0.0, 1.0)));
+  return mix(c, uP0, smoothstep(0.0, 1.0, clamp(t-3.0, 0.0, 1.0))); }
+vec3 gradeMap(vec3 c){
+  float lm = smoothstep(0.06, 0.82, dot(c, vec3(0.299, 0.587, 0.114)));
+  return mix(c, pal(lm*0.74 + uPalPhase), uPalMix); }
+// Holo sheet height field: folds + a ripple ("poke") launched on kicks.
+float hf(vec2 v, float amp, float t){
+  float h = amp*(0.55*sin(v.x*4.0 + t*1.3)*cos(v.y*3.0 - t*0.9) + 0.3*sin(v.y*6.5 + v.x*2.0 - t*1.7) + 0.6*(fbm(v*1.8 + vec2(t*0.25, -t*0.2)) - 0.5));
+  float d = length(v - uPoke.xy);
+  float front = 1.0 - smoothstep(uPoke.z*0.6 - 0.02, uPoke.z*0.6 + 0.1, d);
+  return h + uPokeAmp*0.09*sin(d*24.0 - uPoke.z*13.0)*exp(-uPoke.z*1.6)*front; }
+
+void main(){
+  vec2 fc = gl_FragCoord.xy;
+  // glitch slices: some horizontal bands shift sideways on snares
+  float by = floor(fc.y/uRes.y*20.0);
+  float sl = (h21(vec2(by, uSliceSeed)) - 0.5)*uSlice*step(0.55, h21(vec2(by*1.7, uSliceSeed + 3.1)));
+  vec2 p0 = (fc - 0.5*uRes)/uRes.y;
+  p0.x += sl*0.35;
+  vec2 p = p0/uZoom;
+  if(uMode < 0.5) p.x = abs(p.x);          // Mirror: fold first so the symmetry stays on screen
+  p = rot(uRot)*p;
+  vec3 col; float fog = 1.0;
+
+  if(uMode > 3.5 && uMode < 4.5){
+    // ---- Holo: the image printed on a rippling iridescent foil sheet ----
+    vec2 pp = p/(1.0 + dot(p, uTilt));     // perspective tilt
+    float amp = 0.05 + 0.6*uWarp;
+    float e = 0.004;
+    float h0 = hf(pp, amp, uT);
+    float hx = hf(pp + vec2(e, 0.0), amp, uT);
+    float hy = hf(pp + vec2(0.0, e), amp, uT);
+    vec3 n = normalize(vec3(-(hx-h0)/e, -(hy-h0)/e, 1.0));
+    vec2 sp = pp + n.xy*0.06 - vec2(0.0, h0*0.25);
+    float ca = uRes.x/uRes.y;
+    float sh = min(0.78, 0.78*ca/uAspect);
+    vec2 iuv = vec2(sp.x/(sh*uAspect), sp.y/sh) + 0.5;
+    vec2 ed = min(iuv, 1.0 - iuv);
+    float inside = smoothstep(0.0, 0.004, ed.x)*smoothstep(0.0, 0.004, ed.y);
+    vec2 bq = rot(0.6)*iuv*3.0;             // fine anisotropic scratches
+    float b1 = vnoise(vec2(bq.x*70.0, bq.y*5.0));
+    float b2 = vnoise(vec2(bq.x*5.0 + 3.0, bq.y*70.0));
+    n = normalize(n + vec3(b1 - 0.5, b2 - 0.5, 0.0)*uBump*0.5 + vec3(uTilt*0.8, 0.0));
+    vec3 img = texture2D(uImg, clamp(iuv, 0.0, 1.0)).rgb;
+    vec3 L = normalize(vec3(-0.4, 0.6, 0.7));
+    float ndv = max(n.z, 0.0);
+    float film = ((1.0 - ndv)*10.0 + h0*5.0 + dot(n.xy, vec2(0.7, 0.4))*3.0 + dot(iuv, vec2(0.9, 1.3))*1.2)*uBands + uT*0.05 + uPalPhase;
+    vec3 rainbow = 0.5 + 0.5*cos(6.2831853*(film + vec3(0.0, 0.33, 0.67)));
+    vec3 irid = mix(rainbow, pal(film*0.5), uPalMix);
+    float diff = 0.5 + 0.7*max(dot(n, L), 0.0);
+    vec3 R = reflect(-L, n);
+    float spec = pow(max(R.z, 0.0), 24.0);
+    float lum = dot(img, vec3(0.333));
+    vec3 c = mix(img, img*0.3 + irid*(0.35 + 0.9*lum), uHolo)*diff;
+    c += spec*0.7*uBright*mix(vec3(1.0), irid, 0.5);
+    vec2 cell = floor(iuv*vec2(200.0*uAspect, 200.0));
+    float rr = h21(cell + floor(uT*9.0)*vec2(0.37, 0.71));
+    float glint = smoothstep(1.0 - 0.014*uSparkle, 1.0, rr)*(0.5 + 1.5*spec + 0.8*(1.0 - ndv));
+    c += glint*mix(vec3(1.0), irid, 0.4)*3.0*uSparkle;
+    col = mix(uBg, c, inside);
+
+  } else if(uMode > 4.5 && uMode < 5.5){
+    // ---- Fractal: Julia set; the first orbit point that lands in the image box samples it ----
+    vec2 z = vec2(-p.y, p.x)*2.0;          // rotated so the set runs along the tall axis
+    float trapI = -1.0; vec2 tz = vec2(0.0); float sm = 32.0;
+    for(int i=0;i<32;i++){
+      z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + uJulia;
+      float m2 = dot(z, z);
+      if(trapI < 0.0 && i > 0 && abs(z.x) < 0.42*uAspect && abs(z.y) < 0.42){ trapI = float(i); tz = z; }
+      if(m2 > 64.0){ sm = float(i) - log2(max(log2(m2), 1.0)) + 4.0; break; }
+    }
+    vec2 tuv = vec2(tz.x/(0.84*uAspect), tz.y/0.84) + 0.5 + uDrift*0.3;
+    vec3 img = texture2D(uImg, mr(tuv)).rgb;
+    vec3 esc = texture2D(uImg, mr(vec2(sm*0.04 + uT*0.02, 0.5 + 0.3*sin(sm*0.3)) + uDrift)).rgb*(0.38 + 0.22*sin(sm*0.5 + uT));
+    float depth = 1.0 - clamp(trapI/32.0, 0.0, 1.0)*0.75;
+    col = trapI < 0.0 ? esc : img*depth;
+    col = gradeMap(col);
+
+  } else {
+    // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite ----
+    vec2 q;
+    if(uMode > 0.5 && uMode < 1.5){        // Kaleido: fold before the warp so symmetry holds
+      float r = length(p); float a = atan(p.y, p.x);
+      float seg = 6.2831853/uSeg;
+      a = mod(a, seg); a = abs(a - 0.5*seg);
+      a += uTwist*r;
+      p = r*vec2(cos(a), sin(a));
+    }
+    vec2 w = vec2(fbm(p*2.3 + vec2(0.0, uT*0.21)), fbm(p*2.3 + vec2(5.2, -uT*0.17))) - 0.5;
+    p += w*uWarp;
+    if(uMode < 1.5){
+      q = p;
+    } else if(uMode < 2.5){                // Tunnel
+      float r = max(length(p), 0.0001); float a = atan(p.y, p.x);
+      float u = abs(a)/3.14159265*uSeg*0.25;
+      q = vec2(u*0.8 + uTwist*r*0.3, 0.3/r + uTunZ);
+      fog = smoothstep(0.0, 0.2, r);
+    } else if(uMode < 3.5){                // Liquid
+      vec2 w2 = vec2(fbm(p*1.6 + w*2.5 + uT*0.07), fbm(p*1.6 - w*2.5 - uT*0.05 + 3.1)) - 0.5;
+      q = p + w2*uWarp*1.4;
+    } else {                               // Infinite: log-polar zoom, mirrored per octave, with folds and spiral
+      float r = max(length(p), 0.0001); float lr = log(r); float a = atan(p.y, p.x);
+      float seg = 6.2831853/uSeg;
+      a = mod(a + lr*uTwist*0.35, seg); a = abs(a - 0.5*seg);
+      float per = 0.85;
+      float m = mod(lr - uTunZ*0.45, 2.0*per); m = per - abs(m - per);
+      q = vec2(cos(a), sin(a))*exp(m)*0.24;
+      fog = smoothstep(0.0, 0.025, r);
+    }
+    q += uDrift;
+    vec2 uv = vec2(q.x/uAspect, q.y) + 0.5;
+    vec2 dir = normalize(p0 + 0.00001)*uChroma*0.006;
+    col.r = texture2D(uImg, mr(uv + dir)).r;
+    col.g = texture2D(uImg, mr(uv)).g;
+    col.b = texture2D(uImg, mr(uv - dir)).b;
+    col = gradeMap(col);
+  }
+
+  col = hueRot(col, uHue);
+  float l = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(l), col, uSat);
+  col = (col - 0.5)*uContrast + 0.5;
+  col = clamp(col*uBright*fog, 0.0, 1.0);
+  // feedback: previous frame, slightly zoomed and rotated, mixed in as trails
+  vec2 s = fc/uRes - 0.5;
+  float ar = uRes.x/uRes.y;
+  s.x *= ar; s = rot(uFbRot)*s/uFb; s.x /= ar;
+  vec3 prev = texture2D(uPrev, s + 0.5).rgb;
+  col = mix(col, prev, uTrail);
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+  var postFS = (prec) => prec + `
+uniform sampler2D uTex; uniform vec2 uRes; uniform float uT, uGrain, uVig, uGlow;
+float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+vec3 hot(vec2 uv){ return max(texture2D(uTex, uv).rgb - 0.62, 0.0); }
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec3 c = texture2D(uTex, uv).rgb;
+  if(uGlow > 0.001){                       // stochastic 8-tap glow on the bright parts
+    vec2 px = 1.0/uRes;
+    float r = uRes.y*0.014;
+    float a = h21(gl_FragCoord.xy)*6.2831853;
+    vec3 g = vec3(0.0);
+    for(int i=0;i<8;i++){
+      float fi = float(i);
+      float ang = a + fi*0.7853982;
+      float rad = r*(1.0 + mod(fi, 2.0)*1.4);
+      g += hot(uv + vec2(cos(ang), sin(ang))*rad*px);
+    }
+    c += g*uGlow*0.42;
+  }
+  vec3 over = max(c - 0.78, 0.0);          // soft highlight roll-off instead of clipping
+  c = min(c, 0.78) + 0.22*(1.0 - exp(-over/0.22));
+  vec2 d = uv - 0.5; d.x *= uRes.x/uRes.y;
+  c *= mix(1.0, 1.0 - smoothstep(0.28, 0.9, length(d)), uVig);
+  vec2 gp = gl_FragCoord.xy + fract(uT*7.13)*vec2(317.0, 191.0);
+  float gm = h21(gp) - 0.5;
+  vec3 gc = vec3(h21(gp + 1.3), h21(gp + 2.9), h21(gp + 5.1)) - 0.5;
+  float lum = dot(c, vec3(0.3, 0.59, 0.11));
+  float amt = uGrain*(0.14 + 0.2*(1.0 - abs(lum*2.0 - 1.0)));   // grain strongest in midtones
+  c += (gm*0.75 + gc*0.35)*amt;
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
+  // src/gl/renderer.js
+  var gl;
+  var MAIN;
+  var POST;
+  var imgTex;
+  var aniso;
+  var fbType;
+  var targets = [];
+  var last = 0;
+  var rw = 0;
+  var rh = 0;
+  var onThumb = null;
+  function initRenderer(canvas3, thumbCb) {
+    onThumb = thumbCb;
+    gl = canvas3.getContext("webgl", { preserveDrawingBuffer: true, antialias: false, alpha: false, premultipliedAlpha: false, powerPreference: "high-performance" });
+    if (!gl) return "This browser could not start WebGL, which the visuals need. Try Chrome, Safari or Firefox on a recent device.";
+    const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+    const prec = hp && hp.precision > 0 ? "precision highp float;\n" : "precision mediump float;\n";
+    try {
+      MAIN = program(mainFS(prec));
+      POST = program(postFS(prec));
+    } catch (e) {
+      console.error(e);
+      return "The visual engine failed to start on this device.";
+    }
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    fbType = detectHalfFloat();
+    imgTex = gl.createTexture();
+    aniso = gl.getExtension("EXT_texture_filter_anisotropic") || gl.getExtension("WEBKIT_EXT_texture_filter_anisotropic");
+    return null;
+  }
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function program(fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, VS));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+    gl.bindAttribLocation(p, 0, "aPos");
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const info = gl.getActiveUniform(p, i);
+      u[info.name] = gl.getUniformLocation(p, info.name);
+    }
+    return { p, u };
+  }
+  var u1 = (pr, n, v) => {
+    const l = pr.u[n];
+    if (l) gl.uniform1f(l, v);
+  };
+  var u2 = (pr, n, a, b) => {
+    const l = pr.u[n];
+    if (l) gl.uniform2f(l, a, b);
+  };
+  var u3 = (pr, n, v) => {
+    const l = pr.u[n];
+    if (l) gl.uniform3f(l, v[0], v[1], v[2]);
+  };
+  var ui1 = (pr, n, v) => {
+    const l = pr.u[n];
+    if (l) gl.uniform1i(l, v);
+  };
+  function detectHalfFloat() {
+    const hf = gl.getExtension("OES_texture_half_float");
+    const hfl = gl.getExtension("OES_texture_half_float_linear");
+    gl.getExtension("EXT_color_buffer_half_float");
+    if (!hf || !hfl) return gl.UNSIGNED_BYTE;
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, hf.HALF_FLOAT_OES, null);
+    const f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(f);
+    gl.deleteTexture(t);
+    return ok ? hf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+  }
+  function makeTarget(w, h) {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, fbType, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const f = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { t, f };
+  }
+  function setRenderSize(canvas3, w, h) {
+    if (w === rw && h === rh && targets.length) return;
+    rw = w;
+    rh = h;
+    canvas3.width = w;
+    canvas3.height = h;
+    targets.forEach((x) => {
+      gl.deleteTexture(x.t);
+      gl.deleteFramebuffer(x.f);
+    });
+    targets = [makeTarget(w, h), makeTarget(w, h)];
+    last = 0;
+  }
+  function uploadImage(src, w, h) {
+    const size = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096 ? 2048 : 1024;
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    c.getContext("2d").drawImage(src, 0, 0, size, size);
+    gl.bindTexture(gl.TEXTURE_2D, imgTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+    G.imgAspect = w / h;
+    if (onThumb) onThumb(src, w, h);
+  }
+  function render(now) {
+    const src = targets[last], dst = targets[1 - last];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f);
+    gl.viewport(0, 0, rw, rh);
+    gl.useProgram(MAIN.p);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, imgTex);
+    ui1(MAIN, "uImg", 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, src.t);
+    ui1(MAIN, "uPrev", 1);
+    u2(MAIN, "uRes", rw, rh);
+    u2(MAIN, "uDrift", U.dx, U.dy);
+    u2(MAIN, "uTilt", U.tx, U.ty);
+    u2(MAIN, "uJulia", U.jx, U.jy);
+    u3(MAIN, "uP0", G.pal[0]);
+    u3(MAIN, "uP1", G.pal[1]);
+    u3(MAIN, "uP2", G.pal[2]);
+    u3(MAIN, "uP3", G.pal[3]);
+    u3(MAIN, "uBg", G.bg);
+    u3(MAIN, "uPoke", S.poke);
+    u1(MAIN, "uAspect", G.imgAspect);
+    u1(MAIN, "uT", S.t);
+    u1(MAIN, "uMode", P.mode);
+    u1(MAIN, "uSeg", Math.round(P.seg));
+    u1(MAIN, "uZoom", U.zoom);
+    u1(MAIN, "uRot", S.rot);
+    u1(MAIN, "uWarp", U.warp);
+    u1(MAIN, "uTwist", U.twist);
+    u1(MAIN, "uTrail", U.trail);
+    u1(MAIN, "uHue", U.hue);
+    u1(MAIN, "uChroma", U.chroma);
+    u1(MAIN, "uBright", U.bright);
+    u1(MAIN, "uContrast", U.contrast);
+    u1(MAIN, "uSat", U.sat);
+    u1(MAIN, "uTunZ", S.tun);
+    u1(MAIN, "uFb", U.fb);
+    u1(MAIN, "uFbRot", U.fbRot);
+    u1(MAIN, "uPalMix", V.palMix);
+    u1(MAIN, "uPalPhase", S.palPhase);
+    u1(MAIN, "uSlice", U.slice);
+    u1(MAIN, "uSliceSeed", S.sliceSeed);
+    u1(MAIN, "uHolo", U.holo);
+    u1(MAIN, "uBands", V.bands);
+    u1(MAIN, "uSparkle", U.sparkle);
+    u1(MAIN, "uBump", V.bump);
+    u1(MAIN, "uPokeAmp", U.pokeAmp);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, rw, rh);
+    gl.useProgram(POST.p);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, dst.t);
+    ui1(POST, "uTex", 0);
+    u2(POST, "uRes", rw, rh);
+    u1(POST, "uT", now / 1e3);
+    u1(POST, "uGrain", U.grain);
+    u1(POST, "uVig", 0.55);
+    u1(POST, "uGlow", U.glow);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    last = 1 - last;
+  }
+
+  // src/audio/engine.js
+  var audio = new Audio();
+  audio.loop = true;
+  audio.preload = "auto";
+  var on = { kick: null, snare: null, hat: null, drop: null };
+  var actx = null;
+  var analyser = null;
+  var recDest = null;
+  var fbuf = null;
+  var prevBuf = null;
+  var RG = null;
+  function ensureCtx() {
+    if (actx) {
+      if (actx.state === "suspended") actx.resume();
+      return;
+    }
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+    } catch (e) {
+    }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    actx = new AC();
+    const src = actx.createMediaElementSource(audio);
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.3;
+    fbuf = new Uint8Array(analyser.frequencyBinCount);
+    prevBuf = new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    analyser.connect(actx.destination);
+    if (actx.createMediaStreamDestination) {
+      recDest = actx.createMediaStreamDestination();
+      analyser.connect(recDest);
+    }
+    const hz = actx.sampleRate / analyser.fftSize;
+    const idx = (lo, hi) => [Math.max(1, Math.floor(lo / hz)), Math.min(fbuf.length - 1, Math.ceil(hi / hz))];
+    RG = {
+      low: idx(35, 130),
+      mid: idx(300, 2500),
+      high: idx(5e3, 14e3),
+      all: idx(35, 14e3),
+      kick: idx(35, 150),
+      snare: idx(1e3, 4500),
+      hat: idx(7e3, 15e3)
+    };
+  }
+  var recordStream = () => recDest && recDest.stream;
+  function avg(r) {
+    let s = 0;
+    for (let i = r[0]; i <= r[1]; i++) s += fbuf[i];
+    return s / ((r[1] - r[0] + 1) * 255);
+  }
+  function flux(r) {
+    let s = 0;
+    for (let i = r[0]; i <= r[1]; i++) {
+      const d = fbuf[i] - prevBuf[i];
+      if (d > 0) s += d;
+    }
+    return s / ((r[1] - r[0] + 1) * 255);
+  }
+  var det = (gap, k) => ({ mean: 0, dev: 0, last: -9, gap, k });
+  var DET = { kick: det(0.17, 1.6), snare: det(0.13, 1.9), hat: det(0.06, 1.5) };
+  function detect(d, x, t, dt) {
+    const a = 1 - Math.exp(-dt / 0.9);
+    const hit = x > d.mean + d.k * d.dev + 0.01 && t - d.last > d.gap;
+    if (hit) d.last = t;
+    d.mean += (x - d.mean) * a;
+    d.dev += (Math.abs(x - d.mean) - d.dev) * a;
+    return hit;
+  }
+  var clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
+  function trackTempo() {
+    const ioi = G.clock - BEAT.last;
+    BEAT.last = G.clock;
+    if (ioi <= 0.24 || ioi >= 1.6) return;
+    BEAT.iois.push(ioi);
+    if (BEAT.iois.length > 16) BEAT.iois.shift();
+    if (BEAT.iois.length < 4) return;
+    let m = BEAT.iois.slice().sort((a, b) => a - b)[Math.floor(BEAT.iois.length / 2)];
+    while (m > 0.75) m /= 2;
+    while (m < 0.35) m *= 2;
+    BEAT.period = m;
+    BEAT.bpm = Math.round(60 / m);
+  }
+  function resetAnalysis() {
+    BEAT.iois = [];
+    BEAT.bpm = 0;
+    BEAT.last = -9;
+    A.playT = 0;
+    A.eSlow = 0;
+    A.eFast = 0;
+  }
+  function analyse(dt) {
+    let lo = 0, mi = 0, hi = 0, lv = 0;
+    const playing = analyser && !audio.paused;
+    if (playing) {
+      analyser.getByteFrequencyData(fbuf);
+      const raw = [avg(RG.low), avg(RG.mid), avg(RG.high), avg(RG.all)];
+      for (let i = 0; i < 4; i++) {
+        A.pk[i] = Math.max(raw[i], A.pk[i] - dt * 0.04, 0.12);
+        raw[i] /= A.pk[i];
+      }
+      lo = clamp((raw[0] - 0.35) / 0.65);
+      mi = clamp((raw[1] - 0.25) / 0.75);
+      hi = clamp((raw[2] - 0.2) / 0.8);
+      lv = clamp(raw[3]);
+      const t = G.clock;
+      if (detect(DET.kick, flux(RG.kick), t, dt) && raw[0] > 0.45) {
+        A.kick = 1;
+        trackTempo();
+        on.kick && on.kick();
+      }
+      if (detect(DET.snare, flux(RG.snare), t, dt)) {
+        A.snare = 1;
+        on.snare && on.snare();
+      }
+      if (detect(DET.hat, flux(RG.hat), t, dt)) {
+        A.hat = 1;
+        on.hat && on.hat();
+      }
+      prevBuf.set(fbuf);
+      A.playT += dt;
+    }
+    const env = (cur, target, att, rel) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? att : rel)));
+    A.low = env(A.low, lo, 0.012, 0.14);
+    A.mid = env(A.mid, mi, 0.04, 0.3);
+    A.high = env(A.high, hi, 0.01, 0.1);
+    A.lvl = env(A.lvl, lv, 0.08, 0.6);
+    if (playing) {
+      const dv = 0.6 * lo + 0.4 * lv;
+      A.eFast = env(A.eFast, dv, 0.15, 0.25);
+      A.eSlow = A.playT < 4 ? A.eFast : env(A.eSlow, dv, 3, 3);
+      if (A.playT > 4 && A.eSlow > 0.1 && A.eFast > A.eSlow * 1.35 && A.eFast > 0.3 && G.clock - A.lastDrop > 6) {
+        A.lastDrop = G.clock;
+        A.drop = 1;
+        on.drop && on.drop();
+      }
+    }
+    A.kick *= Math.exp(-dt * 8);
+    A.snare *= Math.exp(-dt * 10);
+    A.hat *= Math.exp(-dt * 16);
+    A.drop *= Math.exp(-dt * 2.5);
+    A.cut *= Math.exp(-dt * 5);
+  }
+
+  // src/audio/sample-loop.js
+  function makeSampleLoop() {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return Promise.reject(new Error("no offline audio"));
+    const sr = 44100, dur = 16, ctx = new OAC(2, sr * dur, sr);
+    const master = ctx.createGain();
+    master.gain.value = 0.8;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.ratio.value = 3;
+    comp.attack.value = 0.01;
+    comp.release.value = 0.2;
+    master.connect(comp);
+    comp.connect(ctx.destination);
+    const noise = ctx.createBuffer(1, sr, sr), nd = noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const B = 0.5;
+    function kick(t, len = 0.42) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(42, t + 0.13);
+      g.gain.setValueAtTime(1e-4, t);
+      g.gain.exponentialRampToValueAtTime(1, t + 4e-3);
+      g.gain.exponentialRampToValueAtTime(1e-3, t + len);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + len + 0.03);
+    }
+    function hat(t, v, len) {
+      const s = ctx.createBufferSource();
+      s.buffer = noise;
+      const f = ctx.createBiquadFilter();
+      f.type = "highpass";
+      f.frequency.value = 7500;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(v, t);
+      g.gain.exponentialRampToValueAtTime(1e-3, t + len);
+      s.connect(f);
+      f.connect(g);
+      g.connect(master);
+      s.start(t, Math.random() * 0.5);
+      s.stop(t + len + 0.02);
+    }
+    function clap(t) {
+      const s = ctx.createBufferSource();
+      s.buffer = noise;
+      const f = ctx.createBiquadFilter();
+      f.type = "bandpass";
+      f.frequency.value = 1700;
+      f.Q.value = 0.9;
+      const g = ctx.createGain();
+      [0, 0.012, 0.024].forEach((o) => {
+        g.gain.setValueAtTime(0.55, t + o);
+        g.gain.exponentialRampToValueAtTime(0.08, t + o + 0.01);
+      });
+      g.gain.setValueAtTime(0.4, t + 0.036);
+      g.gain.exponentialRampToValueAtTime(1e-3, t + 0.25);
+      s.connect(f);
+      f.connect(g);
+      g.connect(master);
+      s.start(t, 0.2);
+      s.stop(t + 0.3);
+    }
+    function bass(t, f0, d) {
+      const o = ctx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = f0;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.Q.value = 6;
+      lp.frequency.setValueAtTime(900, t);
+      lp.frequency.exponentialRampToValueAtTime(140, t + d);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, t);
+      g.gain.exponentialRampToValueAtTime(0.32, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(1e-3, t + d);
+      o.connect(lp);
+      lp.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + d + 0.02);
+    }
+    function pad(t, fs, d) {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, t);
+      g.gain.exponentialRampToValueAtTime(0.06, t + 0.8);
+      g.gain.setValueAtTime(0.06, t + d - 0.6);
+      g.gain.exponentialRampToValueAtTime(1e-4, t + d + 0.4);
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 1500;
+      lp.connect(g);
+      g.connect(master);
+      fs.forEach((f0) => [-7, 7].forEach((cents) => {
+        const o = ctx.createOscillator();
+        o.type = "sawtooth";
+        o.frequency.value = f0;
+        o.detune.value = cents;
+        o.connect(lp);
+        o.start(t);
+        o.stop(t + d + 0.5);
+      }));
+    }
+    function pluck(t, f0, v) {
+      const o = ctx.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = f0;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 5e-3);
+      g.gain.exponentialRampToValueAtTime(5e-4, t + 0.28);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + 0.3);
+    }
+    const chords = [[220, 261.63, 329.63], [174.61, 220, 261.63], [261.63, 329.63, 392], [196, 246.94, 293.66]];
+    const roots = [55, 43.65, 65.41, 49];
+    for (let c = 0; c < 4; c++) pad(c * 4, chords[c], 4);
+    for (let bar = 0; bar < 8; bar++) {
+      const t0 = bar * 2, ci = Math.floor(bar / 2), brk = bar === 4 || bar === 5;
+      for (let b = 0; b < 4; b++) {
+        const t = t0 + b * B;
+        if (!brk) {
+          kick(t, bar === 6 && b === 0 ? 1.1 : 0.42);
+          bass(t + B / 2, roots[ci], 0.22);
+          if (b % 2 === 1) clap(t);
+        }
+        hat(t + B / 2, brk ? 0.07 : 0.16, 0.05);
+        if (bar >= 6) {
+          hat(t + B / 4, 0.07, 0.03);
+          hat(t + 3 * B / 4, 0.07, 0.03);
+        }
+      }
+      if (bar >= 2) for (let s = 0; s < 8; s++) pluck(t0 + s * B / 2, chords[ci][s % 3] * 2, brk ? 0.1 : 0.06);
+    }
+    return new Promise((res, rej) => {
+      ctx.oncomplete = (e) => res(e.renderedBuffer);
+      try {
+        const pr = ctx.startRendering();
+        if (pr && pr.then) pr.then(res, rej);
+      } catch (err) {
+        rej(err);
+      }
+    }).then(toWav);
+  }
+  function toWav(buf) {
+    const ch = buf.numberOfChannels, sr = buf.sampleRate, n = buf.length;
+    const ab = new ArrayBuffer(44 + n * ch * 2), v = new DataView(ab);
+    const ws = (o2, s) => {
+      for (let i = 0; i < s.length; i++) v.setUint8(o2 + i, s.charCodeAt(i));
+    };
+    ws(0, "RIFF");
+    v.setUint32(4, 36 + n * ch * 2, true);
+    ws(8, "WAVE");
+    ws(12, "fmt ");
+    v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true);
+    v.setUint16(22, ch, true);
+    v.setUint32(24, sr, true);
+    v.setUint32(28, sr * ch * 2, true);
+    v.setUint16(32, ch * 2, true);
+    v.setUint16(34, 16, true);
+    ws(36, "data");
+    v.setUint32(40, n * ch * 2, true);
+    const chans = [];
+    for (let c = 0; c < ch; c++) chans.push(buf.getChannelData(c));
+    let o = 44;
+    for (let i = 0; i < n; i++) for (let k = 0; k < ch; k++) {
+      const s = Math.max(-1, Math.min(1, chans[k][i]));
+      v.setInt16(o, s < 0 ? s * 32768 : s * 32767, true);
+      o += 2;
+    }
+    return new Blob([ab], { type: "audio/wav" });
+  }
+
+  // src/image/sample-image.js
+  function makeSampleImage() {
+    const w = 1024, h = 1280, c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d");
+    let seed = 7;
+    const r = () => {
+      seed = seed * 16807 % 2147483647;
+      return seed / 2147483647;
+    };
+    const bg = g.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, "#1a0828");
+    bg.addColorStop(0.5, "#0a1630");
+    bg.addColorStop(1, "#2a120a");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+    const pal = ["255,79,163", "255,170,60", "63,215,198", "122,92,255", "255,233,199", "255,96,60"];
+    g.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 28; i++) {
+      const x = r() * w, y = r() * h, rad = 90 + r() * 360, col = pal[i % pal.length];
+      const rg = g.createRadialGradient(x, y, 0, x, y, rad);
+      rg.addColorStop(0, `rgba(${col},.55)`);
+      rg.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = rg;
+      g.fillRect(x - rad, y - rad, 2 * rad, 2 * rad);
+    }
+    g.globalCompositeOperation = "source-over";
+    g.lineCap = "round";
+    for (let j = 0; j < 70; j++) {
+      let px = r() * w, py = r() * h;
+      g.beginPath();
+      g.moveTo(px, py);
+      for (let k = 0; k < 3; k++) {
+        const c1x = px + (r() - 0.5) * 500, c1y = py + (r() - 0.5) * 500, c2x = px + (r() - 0.5) * 500, c2y = py + (r() - 0.5) * 500;
+        px += (r() - 0.5) * 400;
+        py += (r() - 0.5) * 400;
+        g.bezierCurveTo(c1x, c1y, c2x, c2y, px, py);
+      }
+      g.strokeStyle = r() < 0.45 ? `rgba(8,5,14,${0.5 + r() * 0.4})` : `rgba(${pal[Math.floor(r() * pal.length)]},${0.5 + r() * 0.5})`;
+      g.lineWidth = 1.5 + r() * 12;
+      g.stroke();
+    }
+    for (let m = 0; m < 50; m++) {
+      g.beginPath();
+      g.arc(r() * w, r() * h, 4 + r() * 40, 0, Math.PI * 2);
+      g.strokeStyle = `rgba(255,240,220,${0.3 + r() * 0.5})`;
+      g.lineWidth = 1 + r() * 4;
+      g.stroke();
+    }
+    return c;
+  }
+
+  // src/image/palette.js
+  var lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  var sat = (c) => {
+    const mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]);
+    return mx ? (mx - mn) / mx : 0;
+  };
+  var toHex = (c) => "#" + c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0")).join("");
+  function extractPalette(src) {
+    const N = 48, c = document.createElement("canvas");
+    c.width = c.height = N;
+    let data;
+    try {
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(src, 0, 0, N, N);
+      data = g.getImageData(0, 0, N, N).data;
+    } catch (e) {
+      return null;
+    }
+    const px = [];
+    for (let i = 0; i + 3 < data.length; i += 4) px.push([data[i] / 255, data[i + 1] / 255, data[i + 2] / 255]);
+    if (px.length < 16 || px.some((p) => p.some((v) => !isFinite(v)))) return null;
+    px.sort((a, b) => lum(a) - lum(b));
+    const K = 6;
+    let centers = Array.from({ length: K }, (_, k) => px[Math.floor((k + 0.5) / K * px.length)].slice());
+    let counts = new Array(K).fill(0);
+    for (let it = 0; it < 10; it++) {
+      const sum = Array.from({ length: K }, () => [0, 0, 0]);
+      counts = new Array(K).fill(0);
+      for (const p of px) {
+        let best = 0, bd = 1e9;
+        for (let k = 0; k < K; k++) {
+          const c0 = centers[k], d = (p[0] - c0[0]) ** 2 + (p[1] - c0[1]) ** 2 + (p[2] - c0[2]) ** 2;
+          if (d < bd) {
+            bd = d;
+            best = k;
+          }
+        }
+        sum[best][0] += p[0];
+        sum[best][1] += p[1];
+        sum[best][2] += p[2];
+        counts[best]++;
+      }
+      centers = centers.map((c0, k) => counts[k] ? sum[k].map((v) => v / counts[k]) : c0);
+    }
+    let cl = centers.map((c0, k) => ({ c: c0, n: counts[k] })).filter((x) => x.n > 0).sort((a, b) => lum(a.c) - lum(b.c));
+    while (cl.length < 4) cl.push({ c: cl[cl.length - 1].c.map((v) => Math.min(1, v * 1.4 + 0.1)), n: 1 });
+    let dark = cl[0].c.slice(), light = cl[cl.length - 1].c.slice();
+    const mids = cl.slice(1, -1).sort((a, b) => b.n * (0.4 + sat(b.c)) - a.n * (0.4 + sat(a.c))).slice(0, 2).map((x) => x.c.slice());
+    mids.sort((a, b) => lum(a) - lum(b));
+    const dl = lum(dark);
+    if (dl > 0.1) dark = dark.map((v) => v * 0.1 / dl);
+    const ll = lum(light);
+    if (ll < 0.78) {
+      const t = (0.78 - ll) / (1 - ll);
+      light = light.map((v) => v + (1 - v) * t);
+    }
+    const rgb = [dark, mids[0], mids[1], light];
+    return { rgb, css: `linear-gradient(135deg, ${toHex(mids[0])}, ${toHex(mids[1])} 55%, ${toHex(light)})` };
+  }
+
+  // src/map.js
+  var clamp2 = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
+  var rnd = (a, b) => a + Math.random() * (b - a);
+  function reactKick() {
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    S.rotV += dir * V.punch * V.beat * 0.9 * (Math.abs(V.spin) + 0.15);
+    S.poke = [rnd(-0.25, 0.25), rnd(-0.35, 0.35), 0];
+  }
+  function reactSnare() {
+    S.sliceSeed = Math.random() * 100;
+    if (G.dir === "Original") S.hueKick += (Math.random() < 0.5 ? -1 : 1) * V.color * 0.25 * V.beat;
+    else S.palTarget += 0.25 * clamp2(V.color * 2) * Math.min(1, V.beat + 0.2);
+  }
+  function step(dt) {
+    var _a;
+    const a = 1 - Math.exp(-dt / G.easeTau);
+    for (const k2 of KEYS) V[k2] += (P[k2] - V[k2]) * a;
+    G.easeTau = Math.max(0.1, G.easeTau - dt * 0.25);
+    const Bt = V.beat, F = V.flow;
+    const k = A.kick * V.punch * Bt, sn = A.snare * Bt, ht = A.hat * Math.min(1, Bt + 0.3), drop = A.drop * Bt, cut = A.cut * Bt;
+    const lo = clamp2(A.low * F), mi = clamp2(A.mid * F), hi = clamp2(A.high * F), lv = clamp2(A.lvl * F);
+    const sl = G.reduced ? 0.4 : 1, f60 = dt * 60;
+    S.morph *= Math.exp(-dt * 1.6);
+    S.t += dt * (0.3 + 1.6 * lv + 0.8 * k) * sl;
+    S.rot += dt * (V.spin * (0.2 + 1.3 * lv) + S.rotV) * sl;
+    S.rotV *= Math.exp(-dt * 3.5);
+    S.drift += dt * (0.05 + 0.25 * lv) * sl;
+    S.tun += dt * (0.1 + 0.9 * lv + 2.2 * k) * sl;
+    S.jul += dt * (0.04 + 0.22 * lv + 0.6 * k) * sl;
+    S.palTarget += dt * V.color * (0.02 + 0.18 * hi);
+    S.palPhase += (S.palTarget - S.palPhase) * (1 - Math.exp(-dt / 0.12));
+    S.hueT += dt * (0.15 + 0.5 * hi);
+    S.hueKick *= Math.exp(-dt * 1.5);
+    U.hue = G.dir === "Original" ? V.color * 0.45 * Math.sin(S.hueT) + S.hueKick : 0;
+    S.poke[2] += dt;
+    S.tiltPh += dt * (0.12 + 0.5 * lv) * sl;
+    U.zoom = V.zoom * (1 + 0.18 * lo + 0.3 * k + 0.05 * sn * V.punch + 0.2 * drop);
+    U.warp = V.warp * (0.25 + 1.1 * mi) + 0.1 * k + (P.mode === HOLO ? 0.3 * lo * V.warp : 0);
+    U.twist = V.warp * (0.9 * Math.sin(S.t * 0.27) + 2 * mi) + 0.6 * k;
+    U.chroma = 0.3 + 5 * k + 3 * sn * V.glitch + 2 * hi + 3 * cut;
+    U.bright = 0.96 + 0.32 * k + 0.12 * lo + 0.55 * drop + 0.35 * cut;
+    U.contrast = 1.04 + 0.3 * lo;
+    U.sat = 1 + 0.3 * hi + ((_a = { Ink: 0, Original: 0, Picture: 0.05 }[G.dir]) != null ? _a : 0.12);
+    const trailBase = clamp2(V.trails * (1 - 0.55 * k - 0.5 * cut), 0, 0.97);
+    U.trail = Math.max(Math.pow(trailBase, f60), Math.pow(0.94, f60) * S.morph);
+    U.fb = 1 + (3e-3 + 0.028 * k + 8e-3 * lo) * f60 * (V.trails > 0.01 || S.morph > 0.05 ? 1 : 0);
+    U.fbRot = V.spin * 3e-3 * f60;
+    U.dx = 0.32 * Math.sin(S.drift * 1.3 + S.seed);
+    U.dy = 0.32 * Math.cos(S.drift * 0.9 + S.seed * 1.7);
+    U.slice = V.glitch * (sn * 0.9 + drop * 1.2 + cut * 0.6);
+    U.holo = clamp2(V.holo + 0.15 * hi);
+    U.sparkle = V.sparkle * (0.35 + 1.4 * ht + 0.4 * hi);
+    U.pokeAmp = V.punch * Bt * (0.8 + 0.6 * lo);
+    U.tx = 0.3 * Math.sin(S.tiltPh) + 0.12 * k;
+    U.ty = 0.22 * Math.cos(S.tiltPh * 0.7) - 0.1 * k;
+    const jr = 0.7885 + 0.012 * lo + 0.018 * k;
+    U.jx = jr * Math.cos(S.jul);
+    U.jy = jr * Math.sin(S.jul);
+    U.grain = V.grain * (0.75 + 0.7 * ht + 0.3 * hi);
+    U.glow = V.glow * (0.6 + 0.9 * k + 0.4 * lo + 0.8 * drop);
+  }
+
+  // src/ui.js
+  var el = {};
+  var $ = (id) => document.getElementById(id);
+  var clamp3 = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
+  var H = {};
+  var faders = {};
+  function initUI(handlers) {
+    H = handlers;
+    [
+      "monitor",
+      "view",
+      "safe",
+      "lookBadge",
+      "bigPlay",
+      "bigPlayLbl",
+      "recBadge",
+      "recTime",
+      "recBar",
+      "recFill",
+      "exitFs",
+      "side",
+      "playBtn",
+      "playIcon",
+      "scrub",
+      "tCur",
+      "tDur",
+      "macros",
+      "autoT",
+      "shuffle",
+      "fsBtn",
+      "miniDirs",
+      "miniModes",
+      "recMini",
+      "recMiniLbl",
+      "lKick",
+      "lSnare",
+      "lHat",
+      "lDrop",
+      "bpm",
+      "mLow",
+      "mMid",
+      "mHigh",
+      "tabs",
+      "rack",
+      "thumb",
+      "imgName",
+      "sndName",
+      "imgIn",
+      "sndIn",
+      "dirs",
+      "bars",
+      "trans",
+      "autoNote",
+      "modes",
+      "foldRow",
+      "segIn",
+      "segOut",
+      "feel",
+      "tex",
+      "foilWrap",
+      "foil",
+      "fmts",
+      "quals",
+      "lens",
+      "clips",
+      "safeT",
+      "safeWrap",
+      "recBtn",
+      "recLbl",
+      "recNote",
+      "results",
+      "spec",
+      "drop",
+      "toast"
+    ].forEach((id) => {
+      el[id] = $(id);
+    });
+    Object.keys(DIRS).forEach((name) => {
+      chip(el.dirs, name, true, () => setDirection(name));
+      chip(el.miniDirs, name, true, () => setDirection(name));
+    });
+    BARS.forEach((n) => addBtn(el.bars, n, n + " bars", () => {
+      AUTO.bars = n;
+      setAuto(true);
+    }));
+    TRANSITIONS.forEach((t) => addBtn(el.trans, t, t, () => {
+      AUTO.trans = t;
+      pressed(el.trans, t);
+    }));
+    MODES.forEach((name, i) => {
+      addBtn(el.modes, i, name, () => setMode(i));
+      addBtn(el.miniModes, i, name, () => setMode(i));
+    });
+    buildFaders(el.macros, MACROS, "macro");
+    buildFaders(el.feel, FEEL, "look");
+    buildFaders(el.tex, TEX, null);
+    buildFaders(el.foil, FOIL, null);
+    el.segIn.addEventListener("input", () => {
+      P.seg = parseInt(el.segIn.value, 10);
+      el.segOut.textContent = P.seg;
+      setFill(el.segIn);
+      if (AUTO.on) setAuto(false);
+    });
+    Object.keys(FORMATS).forEach((v) => addBtn(el.fmts, v, v, () => {
+      if (SESSION.active) return;
+      OUT.fmt = v;
+      H.applySize();
+      syncExport();
+    }));
+    Object.keys(QUALS).forEach((v) => addBtn(el.quals, v, v, () => {
+      if (SESSION.active) return;
+      OUT.q = v;
+      H.applySize();
+      syncExport();
+    }));
+    Object.keys(LENS).forEach((v) => addBtn(el.lens, v, v, () => {
+      if (SESSION.active) return;
+      OUT.len = v;
+      syncExport();
+    }));
+    CLIPS.forEach((n) => addBtn(el.clips, n, String(n), () => {
+      if (SESSION.active) return;
+      OUT.clips = n;
+      syncExport();
+    }));
+    el.safeT.addEventListener("change", syncExport);
+    el.autoT.addEventListener("click", () => setAuto(!AUTO.on));
+    el.shuffle.addEventListener("click", shuffle);
+    el.fsBtn.addEventListener("click", () => setImmersive(true));
+    el.exitFs.addEventListener("click", () => setImmersive(false));
+    el.recBtn.addEventListener("click", H.toggleRecord);
+    el.recMini.addEventListener("click", H.toggleRecord);
+    Array.prototype.forEach.call(el.tabs.children, (b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+    setTab("sources");
+    el.monitor.addEventListener("click", (e) => {
+      if (e.target !== el.view) return;
+      if (document.body.classList.contains("immersive")) {
+        toggleOverlay();
+        return;
+      }
+      H.togglePlay();
+    });
+    el.bigPlay.addEventListener("click", (e) => {
+      e.stopPropagation();
+      H.togglePlay();
+    });
+    el.playBtn.addEventListener("click", H.togglePlay);
+    ["pointermove", "pointerdown", "keydown"].forEach((t) => document.addEventListener(t, poke, { passive: true }));
+    document.addEventListener("fullscreenchange", () => {
+      if (!document.fullscreenElement && document.body.classList.contains("immersive") && fsByApi) setImmersive(false);
+    });
+    document.addEventListener("webkitfullscreenchange", () => {
+      if (!document.webkitFullscreenElement && document.body.classList.contains("immersive") && fsByApi) setImmersive(false);
+    });
+    el.imgIn.addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (f) H.loadImageFile(f);
+      e.target.value = "";
+    });
+    el.sndIn.addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (f) H.loadSoundFile(f);
+      e.target.value = "";
+    });
+    initDrop();
+    initKeys();
+    syncExport();
+  }
+  function addBtn(group, v, label, fn, cls) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.v = String(v);
+    if (cls) b.className = cls;
+    if (typeof label === "string") b.textContent = label;
+    else b.appendChild(label);
+    b.addEventListener("click", fn);
+    group.appendChild(b);
+    return b;
+  }
+  function chip(group, name, swatch, fn) {
+    const f = document.createDocumentFragment();
+    if (swatch) {
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      sw.dataset.dir = name;
+      const D = DIRS[name];
+      sw.style.background = D.sw || (D.pal ? `linear-gradient(135deg,${D.pal[1]},${D.pal[2]} 55%,${D.pal[3]})` : "var(--line)");
+      f.appendChild(sw);
+    }
+    f.appendChild(document.createTextNode(name));
+    return addBtn(group, name, f, fn, group === el.dirs ? "chip" : "");
+  }
+  function updatePictureSwatch() {
+    if (!G.picturePal) return;
+    document.querySelectorAll('.sw[data-dir="Picture"]').forEach((s) => {
+      s.style.background = G.picturePal.css;
+    });
+  }
+  function pressed(group, value) {
+    Array.prototype.forEach.call(group.children, (b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(value))));
+  }
+  function setFill(input) {
+    input.style.setProperty("--fill", (input.value - input.min) / (input.max - input.min) * 100 + "%");
+  }
+  function buildFaders(container, defs, kind) {
+    defs.forEach((d) => {
+      const row = document.createElement("div");
+      const id = "f-" + d.k;
+      row.className = kind === "macro" ? "macro" : "fader";
+      row.innerHTML = kind === "macro" ? `<div class="mh"><label for="${id}">${d.label}</label><output for="${id}"></output></div><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}">` : `<label for="${id}">${d.label}</label><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}"><output for="${id}"></output>`;
+      if (d.hint) row.title = d.hint;
+      const input = row.querySelector("input"), out = row.querySelector("output");
+      input.addEventListener("input", () => {
+        P[d.k] = parseFloat(input.value);
+        faders[d.k].forEach((f) => {
+          f.input.value = P[d.k];
+          f.out.textContent = d.fmt(P[d.k]);
+          setFill(f.input);
+        });
+        G.easeTau = 0.08;
+        if (kind === "look" && AUTO.on) setAuto(false);
+      });
+      (faders[d.k] = faders[d.k] || []).push({ input, out, d });
+      container.appendChild(row);
+    });
+  }
+  function syncUI() {
+    pressed(el.dirs, G.dir);
+    pressed(el.miniDirs, G.dir);
+    pressed(el.modes, P.mode);
+    pressed(el.miniModes, P.mode);
+    el.foldRow.hidden = FOLD_MODES.indexOf(P.mode) < 0;
+    el.foilWrap.hidden = P.mode !== HOLO;
+    el.segIn.value = P.seg;
+    el.segOut.textContent = P.seg;
+    setFill(el.segIn);
+    Object.keys(faders).forEach((k) => faders[k].forEach((f) => {
+      f.input.value = P[k];
+      f.out.textContent = f.d.fmt(P[k]);
+      setFill(f.input);
+    }));
+    el.lookBadge.textContent = G.dir + " \xB7 " + MODES[P.mode] + (AUTO.on ? " \xB7 Auto" : "");
+  }
+  function setAutoUI() {
+    el.autoT.setAttribute("aria-pressed", String(AUTO.on));
+    pressed(el.bars, AUTO.on ? AUTO.bars : "");
+    pressed(el.trans, AUTO.trans);
+    el.autoNote.textContent = AUTO.on ? `Auto picks a new look on a kick every ${AUTO.bars} bars, and on drops, inside the direction. Beat and Flow stay yours. Editing the look turns Auto off.` : "Auto is off, so your look stays as you set it. Turn it on to let the music pick new looks.";
+    syncUI();
+  }
+  function syncExport() {
+    pressed(el.fmts, OUT.fmt);
+    pressed(el.quals, OUT.q);
+    pressed(el.lens, OUT.len);
+    pressed(el.clips, OUT.clips);
+    el.safeWrap.hidden = OUT.fmt !== "9:16";
+    el.safe.hidden = !(el.safeT.checked && OUT.fmt === "9:16");
+    el.spec.textContent = `${G.W} \xD7 ${G.H} \xB7 30 fps` + (H.ext ? " \xB7 " + H.ext.toUpperCase() : "");
+    if (!SESSION.active) {
+      const len = OUT.len === "Full" ? "full track" : OUT.len;
+      el.recLbl.textContent = OUT.clips > 1 ? `Record ${OUT.clips} clips \xB7 ${len}` : `Record ${len}`;
+      el.recMiniLbl.textContent = "Record " + (OUT.len === "Full" ? "full" : OUT.len);
+    }
+  }
+  function lockExport(on2) {
+    [el.fmts, el.quals, el.lens, el.clips].forEach((g) => Array.prototype.forEach.call(g.children, (b) => {
+      b.disabled = on2;
+    }));
+    el.scrub.disabled = on2;
+    el.playBtn.disabled = on2 || !H.soundReady();
+  }
+  function setRecUI(on2, n, total) {
+    el.recBtn.classList.toggle("on", on2);
+    el.recMini.classList.toggle("on", on2);
+    el.recBadge.hidden = !on2;
+    el.recBar.hidden = !on2;
+    if (on2) {
+      el.recFill.style.transform = "scaleX(0)";
+      el.recLbl.textContent = total > 1 ? `Stop \xB7 clip ${n} of ${total}` : "Stop recording";
+      el.recMiniLbl.textContent = "Stop";
+      el.bigPlay.hidden = true;
+    } else syncExport();
+  }
+  function setPlaying(playing) {
+    el.playIcon.setAttribute("d", playing ? "M5 3h3.5v14H5zM11.5 3H15v14h-3.5z" : "M5 3l12 7-12 7z");
+    el.playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+    if (playing) el.bigPlay.hidden = true;
+  }
+  function setSoundReady(name) {
+    el.sndName.textContent = name;
+    el.playBtn.disabled = false;
+    el.bigPlay.disabled = false;
+    el.bigPlayLbl.textContent = "Play";
+    el.recBtn.disabled = !H.canRecord();
+    el.recMini.disabled = !H.canRecord();
+  }
+  var toastTimer = 0;
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.toast.hidden = true;
+    }, 4200);
+  }
+  function setTab(t) {
+    el.rack.dataset.tab = t;
+    Array.prototype.forEach.call(el.tabs.children, (b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  }
+  var fsByApi = false;
+  var idleTimer = 0;
+  function setImmersive(on2) {
+    document.body.classList.toggle("immersive", on2);
+    document.body.classList.remove("ui-off");
+    if (on2) {
+      const st = $("stage");
+      const req = st.requestFullscreen || st.webkitRequestFullscreen;
+      fsByApi = false;
+      if (req) {
+        try {
+          const p = req.call(st);
+          fsByApi = true;
+          if (p && p.catch) p.catch(() => {
+            fsByApi = false;
+          });
+        } catch (e) {
+          fsByApi = false;
+        }
+      }
+      poke();
+    } else {
+      clearTimeout(idleTimer);
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if ((document.fullscreenElement || document.webkitFullscreenElement) && exit) {
+        try {
+          const p = exit.call(document);
+          if (p && p.catch) p.catch(() => {
+          });
+        } catch (e) {
+        }
+      }
+      fsByApi = false;
+    }
+  }
+  function toggleOverlay() {
+    document.body.classList.toggle("ui-off");
+    if (!document.body.classList.contains("ui-off")) poke();
+  }
+  function poke(e) {
+    if (!document.body.classList.contains("immersive")) return;
+    if (e && e.type === "pointerdown" && e.target === el.view) return;
+    document.body.classList.remove("ui-off");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (H.isPlaying()) document.body.classList.add("ui-off");
+    }, 3e3);
+  }
+  function addResultCard(blob, name, info, first) {
+    const url = URL.createObjectURL(blob);
+    const card = document.createElement("div");
+    card.className = "result";
+    card.innerHTML = '<video playsinline muted loop autoplay></video><div class="res-meta"><b></b><small></small><button class="savebtn" type="button">Save video</button><p class="note"></p></div>';
+    const vid = card.querySelector("video"), msg = card.querySelector(".note"), btn = card.querySelector(".savebtn");
+    vid.addEventListener("error", () => {
+      vid.hidden = true;
+    });
+    vid.src = url;
+    const vp = vid.play && vid.play();
+    if (vp && vp.catch) vp.catch(() => {
+    });
+    card.querySelector("b").textContent = name;
+    card.querySelector("small").textContent = info;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      msg.textContent = await H.saveBlob(blob, name);
+      btn.disabled = false;
+    });
+    el.results.appendChild(card);
+    while (el.results.children.length > 10) {
+      const old = el.results.firstChild, ov = old.querySelector("video");
+      if (ov && ov.src) URL.revokeObjectURL(ov.src);
+      el.results.removeChild(old);
+    }
+    if (first) {
+      setTab("export");
+      if (!document.body.classList.contains("immersive") && card.scrollIntoView) card.scrollIntoView({ block: "nearest", behavior: G.reduced ? "auto" : "smooth" });
+      else toast("Clip ready. Find it under Export.");
+    }
+  }
+  function drawThumb(src, w, h) {
+    const g = el.thumb.getContext("2d"), s = Math.min(w, h);
+    g.clearRect(0, 0, 96, 96);
+    g.drawImage(src, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 96, 96);
+  }
+  function updateHUD(audio2, scrubbing2) {
+    el.mLow.style.transform = "scaleX(" + clamp3(A.low * V.flow).toFixed(3) + ")";
+    el.mMid.style.transform = "scaleX(" + clamp3(A.mid * V.flow).toFixed(3) + ")";
+    el.mHigh.style.transform = "scaleX(" + clamp3(A.high * V.flow).toFixed(3) + ")";
+    el.lKick.style.opacity = (0.15 + 0.85 * A.kick).toFixed(2);
+    el.lSnare.style.opacity = (0.15 + 0.85 * A.snare).toFixed(2);
+    el.lHat.style.opacity = (0.15 + 0.85 * A.hat).toFixed(2);
+    el.lDrop.style.opacity = (0.15 + 0.85 * A.drop).toFixed(2);
+    el.bpm.textContent = BEAT.bpm ? "\u2248 " + BEAT.bpm + " BPM" : "\u2014 BPM";
+    if (isFinite(audio2.duration) && audio2.duration > 0) {
+      el.tCur.textContent = fmt(audio2.currentTime);
+      if (!scrubbing2) {
+        el.scrub.value = Math.round(audio2.currentTime / audio2.duration * 1e3);
+        setFill(el.scrub);
+      }
+    }
+  }
+  var fmt = (s) => {
+    if (!isFinite(s) || s < 0) s = 0;
+    const m = Math.floor(s / 60), r = Math.floor(s % 60);
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  };
+  function initDrop() {
+    let depth = 0;
+    const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0;
+    window.addEventListener("dragenter", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth++;
+      el.drop.hidden = false;
+    });
+    window.addEventListener("dragover", (e) => {
+      if (hasFiles(e)) e.preventDefault();
+    });
+    window.addEventListener("dragleave", () => {
+      depth = Math.max(0, depth - 1);
+      if (!depth) el.drop.hidden = true;
+    });
+    window.addEventListener("drop", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      el.drop.hidden = true;
+      Array.prototype.forEach.call(e.dataTransfer.files, H.routeFile);
+    });
+  }
+  function initKeys() {
+    document.addEventListener("keydown", (e) => {
+      const tag = e.target && e.target.tagName || "";
+      if (tag === "INPUT" && e.target.type !== "range") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key;
+      if (e.code === "Space" && tag !== "BUTTON") {
+        e.preventDefault();
+        H.togglePlay();
+      } else if (k === "r" || k === "R") {
+        if (!el.recBtn.disabled) H.toggleRecord();
+      } else if (k === "s" || k === "S") shuffle();
+      else if (k === "a" || k === "A") setAuto(!AUTO.on);
+      else if (k === "f" || k === "F") setImmersive(!document.body.classList.contains("immersive"));
+      else if (k === "Escape" && document.body.classList.contains("immersive")) setImmersive(false);
+      else if (/^[1-7]$/.test(k)) setMode(parseInt(k, 10) - 1);
+    });
+  }
+
+  // src/auto.js
+  var rnd2 = (a, b) => a + Math.random() * (b - a);
+  var pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  var clamp4 = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
+  var hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  function lookFor(name, o = {}) {
+    const D = DIRS[name], soft = !!D.soft;
+    const modes = D.modes;
+    let mode = o.signature ? modes[0] : pick(modes);
+    if (o.change && Math.random() < 0.65 || o.big) {
+      const others = modes.filter((m) => m !== P.mode);
+      if (others.length) mode = pick(others);
+    }
+    const sig = o.signature;
+    const L = {
+      mode,
+      seg: pick([3, 4, 5, 6, 6, 8, 8, 10, 12]),
+      punch: sig ? soft ? 0.4 : 0.7 : soft ? rnd2(0.25, 0.5) : rnd2(0.5, 0.95),
+      glitch: sig ? soft ? 0.12 : 0.35 : soft ? rnd2(0, 0.25) : rnd2(0.1, 0.65),
+      warp: sig ? 0.25 : rnd2(0.1, 0.75),
+      trails: sig ? soft ? 0.75 : 0.45 : soft ? rnd2(0.6, 0.9) : rnd2(0.2, 0.8),
+      spin: sig ? 0.22 : rnd2(-0.6, 0.6) * (soft ? 0.4 : 1),
+      zoom: sig ? 0.95 : rnd2(0.8, 1.9)
+    };
+    if (mode === 4) {
+      L.trails = Math.min(L.trails, 0.3);
+      L.zoom = sig ? 1 : rnd2(0.9, 1.2);
+      L.spin *= 0.25;
+      L.warp = Math.max(L.warp, 0.35);
+    }
+    if (mode === 5) {
+      L.zoom = sig ? 1 : rnd2(0.8, 1.4);
+      L.warp = Math.min(L.warp, 0.3);
+    }
+    if (mode === 6) {
+      L.zoom = sig ? 1 : rnd2(0.8, 1.3);
+    }
+    if (o.full) {
+      L.grain = clamp4(D.grain + rnd2(-0.08, 0.08));
+      L.glow = clamp4(D.glow + rnd2(-0.15, 0.15));
+      L.bands = rnd2(0.7, 1.8);
+    }
+    return L;
+  }
+  function applyLook(L, how) {
+    const modeChanged = L.mode !== void 0 && L.mode !== P.mode;
+    Object.keys(L).forEach((k) => {
+      P[k] = L[k];
+    });
+    if (how === "user") {
+      G.easeTau = 0.1;
+    } else if (AUTO.trans === "Morph") {
+      G.easeTau = 0.9;
+      S.morph = 1;
+      A.cut = Math.max(A.cut, 0.2);
+    } else {
+      G.easeTau = 0.15;
+      A.cut = 1;
+      S.seed = Math.random() * 100;
+      S.drift += rnd2(3, 12);
+    }
+    if (how !== "user" && modeChanged && AUTO.trans === "Morph") S.drift += rnd2(0.3, 1);
+    syncUI();
+  }
+  function applyPalette() {
+    const D = DIRS[G.dir];
+    if (G.dir === "Picture") G.pal = G.picturePal ? G.picturePal.rgb : DIRS.Neon.pal.map(hex);
+    else G.pal = D.pal.map(hex);
+    G.bg = G.dir === "Original" || G.dir === "Picture" ? hex("#0b0c12") : G.pal[0];
+  }
+  function setDirection(name) {
+    G.dir = name;
+    applyPalette();
+    const D = DIRS[name];
+    const L = lookFor(name, { signature: true });
+    Object.assign(L, { palMix: D.mix, grain: D.grain, glow: D.glow, color: D.color });
+    if (name === "Holo") Object.assign(L, { holo: 0.84, bands: 1.1, sparkle: 0.73, bump: 0.6 });
+    S.hueKick = 0;
+    applyLook(L, AUTO.on ? "shuffle" : "user");
+  }
+  function setMode(i) {
+    P.mode = i;
+    if (AUTO.on) setAuto(false);
+    S.morph = 0.6;
+    syncUI();
+  }
+  function shuffle() {
+    applyLook(lookFor(G.dir, { change: true, full: true }), "shuffle");
+  }
+  function setAuto(on2) {
+    AUTO.on = on2;
+    AUTO.armed = false;
+    AUTO.phraseStart = G.clock;
+    setAutoUI();
+  }
+  function autoChange(big) {
+    AUTO.armed = false;
+    AUTO.phraseStart = G.clock;
+    applyLook(lookFor(G.dir, { change: true, big }), "auto");
+  }
+  function autoTick(playing) {
+    if (!AUTO.on || !playing) return;
+    const len = AUTO.bars * 4 * BEAT.period;
+    if (!AUTO.armed && G.clock - AUTO.phraseStart >= len) {
+      AUTO.armed = true;
+      AUTO.armedAt = G.clock;
+    }
+    if (AUTO.armed && G.clock - AUTO.armedAt > 1.2) autoChange(false);
+  }
+  function autoOnKick() {
+    if (AUTO.on && AUTO.armed) autoChange(false);
+  }
+  function autoOnDrop() {
+    if (AUTO.on && G.clock - AUTO.phraseStart > 2) autoChange(true);
+  }
+
+  // src/view.js
+  var canvas = null;
+  var slow = 0;
+  var fast = 0;
+  var upBlockedUntil = 0;
+  function initView(cv) {
+    canvas = cv;
+  }
+  function applySize() {
+    const ar = FORMATS[OUT.fmt];
+    G.W = QUALS[OUT.q];
+    G.H = Math.round(G.W * ar[1] / ar[0] / 2) * 2;
+    const root = document.documentElement.style;
+    root.setProperty("--ar", ar[0] + "/" + ar[1]);
+    root.setProperty("--arn", String(ar[0] / ar[1]));
+    resize();
+  }
+  function resize() {
+    const s = G.scale;
+    setRenderSize(canvas, Math.round(G.W * s / 2) * 2, Math.round(G.H * s / 2) * 2);
+  }
+  function setOutputScale(s) {
+    if (s === G.scale) return;
+    G.scale = s;
+    resize();
+  }
+  function adaptQuality(dt, now, recording) {
+    if (recording) {
+      slow = fast = 0;
+      return;
+    }
+    if (dt > 1 / 45) {
+      slow += dt;
+      fast = 0;
+    } else if (dt < 1 / 57) {
+      fast += dt;
+      slow = Math.max(0, slow - dt * 0.5);
+    }
+    if (slow > 2 && G.scale > 0.5) {
+      setOutputScale(G.scale > 0.75 ? 0.75 : 0.5);
+      slow = 0;
+      upBlockedUntil = now + 2e4;
+    } else if (fast > 6 && G.scale < 1 && now > upBlockedUntil) {
+      setOutputScale(G.scale < 0.75 ? 0.75 : 1);
+      fast = 0;
+    }
+  }
+
+  // src/record.js
+  var MIME = pickMime();
+  var EXT = MIME.indexOf("mp4") >= 0 ? "mp4" : "webm";
+  function pickMime() {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+    const c = [
+      "video/mp4;codecs=avc1.42E01F,mp4a.40.2",
+      "video/mp4;codecs=avc1,mp4a.40.2",
+      "video/mp4;codecs=avc1,mp4a",
+      "video/mp4",
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm"
+    ];
+    for (const m of c) if (MediaRecorder.isTypeSupported(m)) return m;
+    return "";
+  }
+  var canvas2 = null;
+  var recorder = null;
+  var chunks = [];
+  var recT0 = 0;
+  var recLen = 0;
+  var clipActive = false;
+  var wakeLock = null;
+  var clipLabel = "";
+  var resultCount = 0;
+  var canRecord = () => !!(MIME && canvas2 && canvas2.captureStream);
+  function initRecord(cv) {
+    canvas2 = cv;
+  }
+  function toggleRecord(soundReady2) {
+    if (SESSION.active) {
+      SESSION.cancel = true;
+      stopClip();
+      return;
+    }
+    if (!canRecord() || !soundReady2) return;
+    ensureCtx();
+    const rs = recordStream();
+    if (!rs) {
+      toast("This browser cannot capture the sound for the video.");
+      return;
+    }
+    if (LENS[OUT.len] === 0) {
+      if (!isFinite(audio.duration)) {
+        toast("The track length is unknown, so pick 15s, 30s or 60s.");
+        return;
+      }
+      if (audio.currentTime > audio.duration - 1) audio.currentTime = 0;
+    }
+    setOutputScale(1);
+    Object.assign(SESSION, { active: true, total: OUT.clips, done: 0, cancel: false, start: audio.currentTime });
+    SESSION.stream = new MediaStream(canvas2.captureStream(30).getVideoTracks().concat(rs.getAudioTracks()));
+    lockExport(true);
+    try {
+      if (navigator.wakeLock) navigator.wakeLock.request("screen").then((l) => {
+        wakeLock = l;
+      }, () => {
+      });
+    } catch (e) {
+    }
+    startClip();
+  }
+  function startClip() {
+    if (!SESSION.active) return;
+    const len = LENS[OUT.len];
+    if (SESSION.done > 0) {
+      applyLook(lookFor(G.dir, { change: true, big: true, full: true }), "user");
+      S.seed = Math.random() * 100;
+      S.drift += 3 + Math.random() * 9;
+      audio.currentTime = SESSION.start;
+    }
+    recLen = len === 0 ? audio.duration - SESSION.start : len;
+    audio.loop = len !== 0;
+    const opts = { mimeType: MIME, videoBitsPerSecond: G.W >= 1080 ? 14e6 : 8e6, audioBitsPerSecond: 192e3 };
+    try {
+      recorder = new MediaRecorder(SESSION.stream, opts);
+    } catch (e) {
+      try {
+        recorder = new MediaRecorder(SESSION.stream);
+      } catch (e2) {
+        toast("Recording could not start in this browser.");
+        endSession();
+        return;
+      }
+    }
+    chunks = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data);
+    };
+    recorder.onstop = onClipStop;
+    clipActive = true;
+    recT0 = 0;
+    clipLabel = G.dir + (AUTO.on ? " \xB7 Auto" : " \xB7 " + MODES[P.mode]);
+    setRecUI(true, SESSION.done + 1, SESSION.total);
+    audio.play().then(() => {
+      if (!clipActive) {
+        audio.pause();
+        return;
+      }
+      recT0 = performance.now();
+      try {
+        recorder.start(1e3);
+      } catch (e) {
+        clipActive = false;
+        toast("Recording could not start in this browser.");
+        endSession();
+      }
+    }).catch(() => {
+      clipActive = false;
+      endSession();
+      toast("Playback was blocked. Tap Record again.");
+    });
+  }
+  function stopClip() {
+    if (!clipActive) {
+      if (SESSION.active && SESSION.cancel) endSession();
+      return;
+    }
+    clipActive = false;
+    audio.pause();
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    else onClipStop();
+  }
+  function onClipStop() {
+    if (chunks.length) makeResult(chunks, Math.min(recLen, recT0 ? (performance.now() - recT0) / 1e3 : 0));
+    chunks = [];
+    SESSION.done++;
+    if (SESSION.active && !SESSION.cancel && SESSION.done < SESSION.total) setTimeout(startClip, 300);
+    else endSession();
+  }
+  function endSession() {
+    if (!SESSION.active) return;
+    SESSION.active = false;
+    audio.loop = true;
+    if (SESSION.stream) SESSION.stream.getVideoTracks().forEach((t) => t.stop());
+    SESSION.stream = null;
+    setRecUI(false);
+    lockExport(false);
+    if (wakeLock) {
+      try {
+        wakeLock.release();
+      } catch (e) {
+      }
+      wakeLock = null;
+    }
+  }
+  function recordTick(now) {
+    if (!clipActive || !recT0) return;
+    const e = (now - recT0) / 1e3;
+    el.recTime.textContent = "REC " + fmt2(e) + " / " + fmt2(recLen) + (SESSION.total > 1 ? " \xB7 " + (SESSION.done + 1) + "/" + SESSION.total : "");
+    el.recFill.style.transform = "scaleX(" + Math.min(1, e / recLen).toFixed(4) + ")";
+    if (e >= recLen) stopClip();
+  }
+  var isClipActive = () => clipActive;
+  var fmt2 = (s) => {
+    if (!isFinite(s) || s < 0) s = 0;
+    const m = Math.floor(s / 60), r = Math.floor(s % 60);
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  };
+  function makeResult(parts, secs) {
+    const type = recorder && recorder.mimeType || MIME || "video/webm";
+    const ext = type.indexOf("mp4") >= 0 ? "mp4" : "webm";
+    const blob = new Blob(parts, { type: type.split(";")[0] });
+    const d = /* @__PURE__ */ new Date(), z = (n) => (n < 10 ? "0" : "") + n;
+    resultCount++;
+    const name = `miroir-sonore-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${resultCount}.${ext}`;
+    const info = `${G.W} \xD7 ${G.H} \xB7 ${fmt2(secs)} \xB7 ${(blob.size / 1048576).toFixed(1)} MB \xB7 ${clipLabel}`;
+    addResultCard(blob, name, info, resultCount === 1);
+  }
+  var downloadsP = window.claude && typeof window.claude.use === "function" ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+  async function saveBlob(blob, name) {
+    const dl = await downloadsP;
+    if (dl) {
+      try {
+        await dl.save({ filename: name, data: blob });
+        return "Saved. Post it from your camera roll or downloads.";
+      } catch (err) {
+        const c = err && err.code;
+        return c === "declined" ? "Save cancelled." : c === "rate_limited" ? "A save prompt is already open." : c === "too_large" ? "This clip is too large to save here. Try 720p or a shorter length." : c === "rejected_extension" ? "This video format cannot be saved here." : "Saving is not available in this view.";
+      }
+    }
+    if (window.claude) return "Saving is not available in this view. Open the page in the Claude app or on claude.ai.";
+    try {
+      const file = new File([blob], name, { type: blob.type });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return "Shared.";
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return "Share cancelled.";
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return "Downloaded.";
+  }
+
+  // src/main.js
+  var soundURL = null;
+  var soundReady = false;
+  var scrubbing = false;
+  function boot() {
+    const canvas3 = document.getElementById("view");
+    const err = initRenderer(canvas3, (src, w, h) => {
+      drawThumb(src, w, h);
+      G.picturePal = extractPalette(src) || G.picturePal;
+      updatePictureSwatch();
+      if (G.dir === "Picture") applyPalette();
+    });
+    if (err) {
+      document.getElementById("monitor").innerHTML = '<p class="err">' + err + "</p>";
+      return;
+    }
+    initView(canvas3);
+    initRecord(canvas3);
+    initUI({
+      togglePlay,
+      routeFile,
+      loadImageFile,
+      loadSoundFile,
+      applySize,
+      saveBlob,
+      toggleRecord: () => toggleRecord(soundReady),
+      soundReady: () => soundReady,
+      canRecord,
+      isPlaying: () => !audio.paused,
+      ext: MIME ? EXT : ""
+    });
+    if (!window.MediaRecorder || !canvas3.captureStream) {
+      el.recNote.textContent = "Recording needs a browser that can capture video, such as Chrome, Edge, Firefox or Safari 14.1 and later.";
+    }
+    on.kick = () => {
+      reactKick();
+      autoOnKick();
+    };
+    on.snare = reactSnare;
+    on.drop = autoOnDrop;
+    audio.addEventListener("play", () => setPlaying(true));
+    audio.addEventListener("pause", () => setPlaying(false));
+    audio.addEventListener("ended", () => {
+      if (isClipActive()) stopClip();
+    });
+    audio.addEventListener("error", () => {
+      if (audio.src) toast("That sound could not be played. Try an MP3, WAV or M4A file.");
+    });
+    audio.addEventListener("loadedmetadata", () => {
+      el.tDur.textContent = fmtT(audio.duration);
+    });
+    el.scrub.addEventListener("pointerdown", () => {
+      scrubbing = true;
+    });
+    window.addEventListener("pointerup", () => {
+      scrubbing = false;
+    });
+    el.scrub.addEventListener("change", () => {
+      scrubbing = false;
+    });
+    el.scrub.addEventListener("input", () => {
+      setFill(el.scrub);
+      if (isFinite(audio.duration) && !SESSION.active) audio.currentTime = el.scrub.value / 1e3 * audio.duration;
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && SESSION.active) {
+        SESSION.cancel = true;
+        stopClip();
+        toast("Recording stopped because the page went to the background. Finished clips are kept.");
+      }
+    });
+    const sample = makeSampleImage();
+    uploadImage(sample, sample.width, sample.height);
+    setDirection(DEFAULT_DIR);
+    setAuto(true);
+    applySize();
+    syncExport();
+    requestAnimationFrame(frame);
+    makeSampleLoop().then((blob) => {
+      if (!soundReady) setSound(URL.createObjectURL(blob), "Sample loop \xB7 120 BPM");
+    }).catch(() => {
+      el.sndName.textContent = "Choose a sound to start";
+      el.bigPlayLbl.textContent = "Choose a sound to start";
+    });
+  }
+  var fmtT = (s) => {
+    if (!isFinite(s) || s < 0) s = 0;
+    const m = Math.floor(s / 60), r = Math.floor(s % 60);
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  };
+  function togglePlay() {
+    if (!soundReady || SESSION.active) return;
+    ensureCtx();
+    if (audio.paused) audio.play().catch(() => toast("Playback was blocked. Tap Play again."));
+    else audio.pause();
+  }
+  function loadImageFile(file) {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      uploadImage(img, img.naturalWidth, img.naturalHeight);
+      el.imgName.textContent = file.name || "Image";
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      toast("That image could not be opened. Try a JPG, PNG or WebP.");
+    };
+    img.src = url;
+  }
+  function setSound(url, name) {
+    const wasPlaying = !audio.paused;
+    if (soundURL && soundURL !== url) URL.revokeObjectURL(soundURL);
+    soundURL = url;
+    audio.src = url;
+    audio.load();
+    soundReady = true;
+    resetAnalysis();
+    setSoundReady(name);
+    if (wasPlaying) audio.play().catch(() => {
+    });
+  }
+  function loadSoundFile(file) {
+    setSound(URL.createObjectURL(file), file.name || "Sound");
+  }
+  function routeFile(f) {
+    const t = f.type || "", n = (f.name || "").toLowerCase();
+    if (t.indexOf("image/") === 0 || /\.(png|jpe?g|webp|gif|avif|bmp)$/.test(n)) loadImageFile(f);
+    else if (t.indexOf("audio/") === 0 || t.indexOf("video/") === 0 || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|aiff?|mp4|mov|webm)$/.test(n)) loadSoundFile(f);
+    else toast("Drop an image (JPG, PNG, WebP) or a sound (MP3, WAV, M4A).");
+  }
+  var prevNow = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(1e-3, (now - prevNow) / 1e3));
+    prevNow = now;
+    const playing = !audio.paused;
+    if (playing) G.clock += dt;
+    analyse(dt);
+    autoTick(playing);
+    step(dt);
+    render(now);
+    updateHUD(audio, scrubbing);
+    recordTick(now);
+    adaptQuality(dt, now, SESSION.active);
+    requestAnimationFrame(frame);
+  }
+  boot();
+})();
+</script>

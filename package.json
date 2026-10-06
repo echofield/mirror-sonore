@@ -1,0 +1,22 @@
+{
+  "name": "miroir-sonore",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Drop an image and a sound; get audio-reactive visuals and record vertical clips for TikTok.",
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes serve -l 5173 .",
+    "build": "node scripts/build.mjs",
+    "test:shaders": "node tests/shaders.test.mjs",
+    "test:sim": "node tests/sim.test.mjs",
+    "test": "npm run build && npm run test:shaders && npm run test:sim"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "optionalDependencies": {
+    "gl": "^8.1.6",
+    "jsdom": "^24.1.3",
+    "pngjs": "^7.0.0"
+  }
+}

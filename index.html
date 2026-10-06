@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Miroir Sonore</title>
+<meta name="description" content="Drop an image and a sound. The picture folds, warps and hits with the music. Record vertical clips for TikTok.">
+<meta name="theme-color" content="#0c0d13">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap">
+<!-- build:css --><link rel="stylesheet" href="src/styles.css"><!-- /build:css -->
+</head>
+<body>
+<!-- build:markup -->
+<div class="app">
+  <header class="head">
+    <div>
+      <h1 class="mark">Miroir <span>Sonore</span></h1>
+      <p class="tag">Drop an image and a sound. Pick a direction, let Auto change the look on the beat, and record vertical clips for TikTok.</p>
+    </div>
+    <p class="spec" id="spec">720 × 1280 · 30 fps</p>
+  </header>
+
+  <section class="stage" id="stage" aria-label="Preview">
+    <div class="monitor" id="monitor">
+      <canvas id="view" width="720" height="1280" aria-label="Live visual preview"></canvas>
+      <div class="safe" id="safe" hidden><i class="s-top"></i><i class="s-bot"></i><i class="s-rail"></i><span>Covered by TikTok UI</span></div>
+      <span class="lookbadge" id="lookBadge">Picture · Kaleido</span>
+      <button class="bigplay" id="bigPlay" type="button" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l12 7-12 7z" fill="currentColor"/></svg>
+        <span id="bigPlayLbl">Loading…</span>
+      </button>
+      <div class="recbadge" id="recBadge" hidden><i></i><span id="recTime">REC 0:00 / 0:15</span></div>
+      <div class="recbar" id="recBar" hidden><i id="recFill"></i></div>
+    </div>
+    <button class="exitfs" id="exitFs" type="button" aria-label="Exit full screen">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+
+    <div class="side" id="side">
+      <div class="transport">
+        <button class="pbtn" id="playBtn" type="button" aria-label="Play" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path id="playIcon" d="M5 3l12 7-12 7z" fill="currentColor"/></svg>
+        </button>
+        <div class="scrub">
+          <input id="scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in the track">
+          <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+        </div>
+      </div>
+      <div class="macros" id="macros"></div>
+      <div class="quick">
+        <button class="switch" id="autoT" type="button" aria-pressed="true"><i></i>Auto</button>
+        <button class="qbtn" id="shuffle" type="button">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 3l1 2c1 2 2 3 4 3H17M14.5 11.5 17 14l-2.5 2.5M3 14h3.5c1.2 0 2-.4 2.7-1.1M11.8 7.1C12.5 6.4 13.3 6 14.5 6H17M14.5 3.5 17 6l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Shuffle
+        </button>
+        <button class="qbtn" id="fsBtn" type="button">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Full screen
+        </button>
+      </div>
+      <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
+      <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
+      <button class="recbtn mini-rec" id="recMini" type="button" disabled><i></i><span id="recMiniLbl">Record 15s</span></button>
+      <div class="leds" aria-hidden="true">
+        <span class="led"><em id="lKick"></em>KICK</span>
+        <span class="led"><em id="lSnare"></em>SNARE</span>
+        <span class="led"><em id="lHat"></em>HAT</span>
+        <span class="led"><em id="lDrop"></em>DROP</span>
+        <span class="bpm" id="bpm">— BPM</span>
+      </div>
+      <div class="meters" aria-hidden="true">
+        <div class="meter"><span>LOW</span><b><i id="mLow"></i></b></div>
+        <div class="meter"><span>MID</span><b><i id="mMid"></i></b></div>
+        <div class="meter"><span>HIGH</span><b><i id="mHigh"></i></b></div>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs" aria-label="Controls">
+      <button type="button" data-tab="sources">Sources</button>
+      <button type="button" data-tab="direction">Direction</button>
+      <button type="button" data-tab="look">Look</button>
+      <button type="button" data-tab="color">Color</button>
+      <button type="button" data-tab="export">Export</button>
+    </nav>
+  </section>
+
+  <aside class="rack" id="rack" data-tab="sources">
+    <section class="sec" data-tab="sources">
+      <h2 class="lab">Sources</h2>
+      <div class="src">
+        <label class="tile" for="imgIn">
+          <canvas class="thumb" id="thumb" width="96" height="96"></canvas>
+          <span class="tile-txt"><b>Image</b><span id="imgName">Sample image (generated)</span></span>
+          <span class="tile-act">Choose</span>
+          <input class="vh" id="imgIn" type="file" accept="image/*">
+        </label>
+        <label class="tile" for="sndIn">
+          <span class="wave"><svg viewBox="0 0 28 28" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 11v6M9 7v14M14 4v20M19 9v10M24 12v4"/></g></svg></span>
+          <span class="tile-txt"><b>Sound</b><span id="sndName">Preparing sample loop…</span></span>
+          <span class="tile-act">Choose</span>
+          <input class="vh" id="sndIn" type="file" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
+        </label>
+      </div>
+      <p class="note">Or drag files anywhere onto the page. A video file works as a sound source too.</p>
+    </section>
+
+    <section class="sec" data-tab="direction">
+      <h2 class="lab">Direction</h2>
+      <div class="chips" id="dirs" role="group" aria-label="Direction"></div>
+      <p class="note">Picture takes its colors from your image. Original keeps the image exactly as it is. The others repaint it.</p>
+      <div class="opt"><span>Auto every</span><div class="seg sm" id="bars" role="group" aria-label="Change the look every"></div></div>
+      <div class="opt"><span>Transition</span><div class="seg sm" id="trans" role="group" aria-label="Transition"></div></div>
+      <p class="note" id="autoNote"></p>
+    </section>
+
+    <section class="sec" data-tab="look">
+      <h2 class="lab">Look</h2>
+      <div class="modegrid" id="modes" role="group" aria-label="Mode"></div>
+      <div class="fader" id="foldRow">
+        <label for="segIn">Folds</label>
+        <input id="segIn" type="range" min="2" max="16" step="1">
+        <output id="segOut" for="segIn"></output>
+      </div>
+      <div class="faders" id="feel"></div>
+    </section>
+
+    <section class="sec" data-tab="color">
+      <h2 class="lab">Color &amp; texture</h2>
+      <div class="faders" id="tex"></div>
+      <div id="foilWrap">
+        <p class="sublab">Foil · Holo mode</p>
+        <div class="faders" id="foil"></div>
+      </div>
+    </section>
+
+    <section class="sec" data-tab="export">
+      <h2 class="lab">Export</h2>
+      <div class="opt"><span>Format</span><div class="seg sm" id="fmts" role="group" aria-label="Format"></div></div>
+      <div class="opt"><span>Quality</span><div class="seg sm" id="quals" role="group" aria-label="Quality"></div></div>
+      <div class="opt"><span>Length</span><div class="seg sm" id="lens" role="group" aria-label="Length"></div></div>
+      <div class="opt"><span>Clips</span><div class="seg sm" id="clips" role="group" aria-label="Number of clips"></div></div>
+      <label class="check" id="safeWrap"><input type="checkbox" id="safeT"> Show TikTok safe zone</label>
+      <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
+      <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
+      <div class="results" id="results"></div>
+      <p class="keys">Space play · R record · S shuffle · A auto · F full screen · 1–7 modes</p>
+    </section>
+  </aside>
+</div>
+
+<div class="drop" id="drop" hidden><p>Drop an image or a sound</p></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<!-- /build:markup -->
+<!-- build:js --><script type="module" src="src/main.js"></script><!-- /build:js -->
+</body>
+</html>
