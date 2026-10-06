@@ -1,6 +1,7 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
 import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
-import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP } from './state.js';
+import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP, HAND } from './state.js';
+import { initHands, handKey, wasDrag, setLatch, centreHands } from './hands.js';
 import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
 import { KEPT, keepLook, removeKept, restoreKept, applyKept } from './presets.js';
 
@@ -14,7 +15,7 @@ export function initUI(handlers) {
   H = handlers;
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'miniKept', 'recMini', 'recMiniLbl',
-   'shotBtn', 'keepBtn', 'kept', 'keptNote',
+   'shotBtn', 'keepBtn', 'kept', 'keptNote', 'pad', 'latchT', 'latchT2',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
    'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
@@ -76,9 +77,16 @@ export function initUI(handlers) {
   const want = (location.hash || '').slice(1);
   setTab(Array.prototype.some.call(el.tabs.children, b => b.dataset.tab === want) ? want : 'sources');
 
-  // monitor: tap plays/pauses; in full screen it shows/hides the overlay instead
+  // the hands: drag on the picture to play it; Latch keeps them where they are left
+  const latches = [el.latchT, el.latchT2];
+  initHands(el.view, el.pad, on => latches.forEach(b => b.setAttribute('aria-pressed', String(on))));
+  latches.forEach(b => b.addEventListener('click', () => setLatch(!HAND.latch)));
+  // after the mouse has moved a fader, give the arrow keys back to the hands
+  document.addEventListener('pointerup', e => { const t = e.target; if (t && t.tagName === 'INPUT' && t.type === 'range' && e.pointerType === 'mouse') t.blur(); });
+
+  // monitor: tap plays/pauses (a drag does not); in full screen it shows/hides the overlay instead
   el.monitor.addEventListener('click', e => {
-    if (e.target !== el.view) return;
+    if (e.target !== el.view || wasDrag()) return;
     if (document.body.classList.contains('immersive')) { toggleOverlay(); return; }
     H.togglePlay();
   });
@@ -221,7 +229,17 @@ export function setRecUI(on, n, total) {
   } else syncExport();
 }
 
+// Said once, the first time the sound plays: the picture can be played by hand.
+let hinted = false;
+function hintHands() {
+  if (hinted) return;
+  hinted = true;
+  try { if (localStorage.getItem('miroir-sonore.hint.v1')) return; localStorage.setItem('miroir-sonore.hint.v1', '1'); } catch (e) { /* say it anyway */ }
+  const fine = typeof matchMedia === 'function' && matchMedia('(pointer:fine)').matches;
+  toast(fine ? 'Drag on the picture to play it, or hold the arrow keys.' : 'Drag on the picture to play it.');
+}
 export function setPlaying(playing) {
+  if (playing) hintHands();
   el.playIcon.setAttribute('d', playing ? 'M5 3h3.5v14H5zM11.5 3H15v14h-3.5z' : 'M5 3l12 7-12 7z');
   el.playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
   if (playing) el.bigPlay.hidden = true;
@@ -317,7 +335,7 @@ export function setImmersive(on) {
 function toggleOverlay() { document.body.classList.toggle('ui-off'); if (!document.body.classList.contains('ui-off')) poke(); }
 function poke(e) {
   if (!document.body.classList.contains('immersive')) return;
-  if (e && e.type === 'pointerdown' && e.target === el.view) return;   // the tap toggle handles that
+  if (e && e.target === el.view && (e.type === 'pointerdown' || e.buttons || e.pointerType === 'touch')) return;   // taps toggle, drags play
   document.body.classList.remove('ui-off');
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => { if (H.isPlaying()) document.body.classList.add('ui-off'); }, 3000);
@@ -394,9 +412,12 @@ function initKeys() {
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' && e.target.type !== 'range') return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (tag !== 'INPUT' && tag !== 'SELECT' && handKey(e, true)) { e.preventDefault(); return; }
     const k = e.key;
     if (e.code === 'Space' && tag !== 'BUTTON') { e.preventDefault(); H.togglePlay(); }
     else if (k === 'r' || k === 'R') { if (!el.recBtn.disabled) H.toggleRecord(); }
+    else if (k === '0') centreHands();
+    else if (k === 'l' || k === 'L') setLatch(!HAND.latch);
     else if (k === 'i' || k === 'I') H.takeStill();
     else if (k === 'k' || k === 'K') keep();
     else if (k === 's' || k === 'S') shuffle();
@@ -407,4 +428,5 @@ function initKeys() {
     else if (k === 'Escape' && document.body.classList.contains('immersive')) setImmersive(false);
     else if (/^[1-9]$/.test(k) && parseInt(k, 10) <= MODES.length) setMode(parseInt(k, 10) - 1);
   });
+  document.addEventListener('keyup', e => { handKey(e, false); });
 }

@@ -24,6 +24,10 @@ export const S = {
 export const WAVE_N = 128;
 export const WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N * 4) };
 
+// The hands: offsets played on top of the look by dragging on the picture or holding the arrow keys
+// (see hands.js). t is where the hand is going, v where the picture is, each from -1 to 1.
+export const HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0, zoom: 0, warp: 0, trails: 0 }, latch: false, active: false };
+
 // Pump style and length are the user's, like Beat/Pump/Flow: Auto never changes them.
 export const PUMP = { style: 'Punch', len: '1/8' };
 

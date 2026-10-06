@@ -1,5 +1,6 @@
 // Boot and the frame loop. Order per frame: clock → analysis → Auto → mapping → render → HUD → recording.
-import { G, SESSION, U, V, S, PUMP, BEAT, WV } from './state.js';
+import { G, SESSION, U, V, S, PUMP, BEAT, WV, HAND } from './state.js';
+import { handTick } from './hands.js';
 import { initRenderer, uploadImage, useVideo, render } from './gl/renderer.js';
 import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
 import { makeSampleLoop } from './audio/sample-loop.js';
@@ -146,6 +147,7 @@ function frame(now) {
   analyse(dt);
   syncVideo(playing);
   autoTick(playing);
+  handTick(dt);
   step(dt);
   render(now);
   updateHUD(audio, scrubbing);
@@ -155,5 +157,5 @@ function frame(now) {
 }
 
 // Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
-if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV };
+if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV, HAND };
 boot();

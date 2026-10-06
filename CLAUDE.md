@@ -18,19 +18,20 @@ Run `npm test` after any change to `src/gl`, `src/audio`, `src/auto.js`, `src/ma
 
 ## Architecture
 
-Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` → `render` → `updateHUD` → `recordTick` → `adaptQuality`.
+Frame order (in `src/main.js`): clock → `analyse` → `syncVideo` → `autoTick` → `handTick` → `step` → `render` → `updateHUD` → `recordTick` → `adaptQuality`.
 
 | File | Responsibility |
 |---|---|
 | `src/config.js` | Modes, color directions, fader definitions, defaults, export options. Start here for new modes/directions. |
 | `src/state.js` | Shared mutable state objects (see "State" below). Mutate fields; never reassign the exports. |
-| `src/gl/shaders.js` | GLSL ES 1.0. `mainFS` (mode transforms, palette grading, trip layer, feedback trails), `postFS` (glow, roll-off, vignette, grain), `copyFS` (tracer capture). |
+| `src/gl/shaders.js` | GLSL ES 1.0. `mainFS` (mode transforms, palette grading, trip layer, feedback trails), `postFS` (tape, glow, roll-off, vignette, grain), `copyFS` (tracer capture). |
 | `src/gl/renderer.js` | WebGL1 setup, ping-pong feedback targets (half-float when available), the held tracer frame, mipmapped image texture or a video's current frame (`useVideo`), the one-row Wave data texture, uniform upload. |
 | `src/audio/engine.js` | `<audio>` → analyser graph, band envelopes, spectral-flux onsets (kick/snare/hat), tempo from kick intervals, drop detection. Fires `on.kick/snare/hat/drop`. |
 | `src/audio/sample-loop.js` | Offline-synthesised 16 s demo loop (groove → breakdown → drop) encoded to WAV. |
 | `src/image/palette.js` | k-means palette from the loaded image → the "Picture" direction. |
 | `src/image/sample-image.js` | Generated demo image. |
 | `src/map.js` | Sound → uniforms. Hit reactions (`reactKick`, `reactSnare`) and the per-frame `step`. |
+| `src/hands.js` | The hands: drags on the picture and held arrow keys push offsets (`HAND`) on top of the look; spring back, or Latch. |
 | `src/auto.js` | Looks, directions, trips (`setTrip`), Shuffle, the Auto engine (new look on a kick every N bars and on drops), Morph/Cut transitions. |
 | `src/ui.js` | Builds controls from config, `syncUI`, phone tabs, full screen (CSS immersive + optional Fullscreen API), results list, keyboard. |
 | `src/record.js` | Recording sessions (1/3/5 clips), MediaRecorder, still images (`takeStill`: the canvas as a PNG at full output size), saving (Artifact downloads capability, else share sheet, else download link). |
@@ -53,9 +54,12 @@ The interface follows IFAH's paper direction. Colour is semantic: ink is what is
 - **Beat, Pump and Flow are the user's.** `V.beat` scales hit effects (glitch, color split, ripples, jolts, drop flash). `V.pump` and `PUMP.style`/`PUMP.len` control the kick "sidechaining" the picture: Off, Duck, Punch or Breathe, with a length in notes synced to the detected tempo. `V.flow` scales continuous audio motion. Auto and Shuffle must never change any of them.
 - **Pump is the only path from kick/bass to zoom, brightness, contrast and glow** (`pumpShape` in `map.js`). Don't add kick or bass terms to those uniforms elsewhere, or Pump Off stops meaning "no pumping". Moving a Look fader (punch, glitch, warp, trails, spin, zoom, folds, mode) turns Auto off. Color/texture faders and macros do not.
 - **A kept look is the user's whole setup**, so bringing one back does set Beat, Pump, Flow, pump style and Auto. That is the one exception to the rule above.
+- **The hands never write to `P`.** `HAND.v` (spin, zoom, warp, trails, each −1 to 1) is added to the look inside `map.js/step` only. So playing the picture leaves Auto on, and a kept look does not hold the hands. One finger or the mouse: sideways spin, up/down zoom. Two fingers: trails and warp. Keys: arrows, Shift + arrows, `0` centre, `L` latch.
+- **Wave and VHS are chosen by hand.** No direction or trip lists them, so Auto and Shuffle never pick them and Auto's tuned pools stay as they were. Choosing one sets its starting look (`HAND_MODES` in `config.js`).
+- **VHS (mode 8)** plays the picture upright; the tape itself is in `postFS` (`uTape`, `uTapeHit`), so the Tape fader can lay it over any mode. In VHS mode the tape is at least 85%.
 - **Wave (mode 7)** keeps the picture upright and in place. `map.js` fills `WV.tex` (128 × 1): red is the spectrum standing in place (bass in the middle), green is the level history that enters on the left and crosses in one bar. Warp sets the height, Folds the number of ripples, Spin slides the picture sideways.
 - **A video picture** plays muted and follows the sound's clock (`syncVideo` in `main.js`), so one section of the track always shows the same frames. A video dropped on the page is both picture and sound.
-- **Mode ids are fixed**: 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite, 7 Wave. They are referenced in `config.js` (`DIRS[*].modes`, `FOLD_MODES`, `HOLO`), `shaders.js` (`uMode` branches) and `auto.js` (per-mode tweaks).
+- **Mode ids are fixed**: 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite, 7 Wave, 8 VHS. They are referenced in `config.js` (`DIRS[*].modes`, `TRIPS[*].modes`, `FOLD_MODES`, `HOLO`, `WAVE`, `VHS`, `HAND_MODES`), `shaders.js` (`uMode` branches) and `auto.js` (per-mode tweaks).
 - **WebGL1 / GLSL ES 1.0 only** (older iPhones). Loops need constant bounds. `smoothstep(a, b, x)` needs `a < b`. Avoid `texture2D` inside non-uniform control flow: compute the coordinate in the loop and sample after it (see the Fractal branch).
 - Kaleido and Mirror fold **before** the warp; otherwise the symmetry breaks.
 - **Audio graph**: `createMediaElementSource` can be called once per element, so swap `audio.src` instead of making new elements. Create or resume the AudioContext only inside a user gesture (`ensureCtx`). `navigator.audioSession.type = 'playback'` lets iOS play with the silent switch on.

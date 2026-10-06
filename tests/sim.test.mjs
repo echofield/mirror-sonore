@@ -1,6 +1,6 @@
 // Runs the built page (dist/index.html) in jsdom with headless WebGL and a fake 120 BPM track
 // (kick on every beat, snare on 2 and 4, hats on the off-beats, a breakdown from 8 s to 12 s).
-// Checks tempo, hit and drop detection, Auto, the controls, the Wave mode, kept looks, still images,
+// Checks tempo, hit and drop detection, Auto, the controls, trips, the Wave and VHS modes, the hands, kept looks, still images,
 // full screen and multi-clip recording.
 // Linux needs a virtual display:  xvfb-run -a npm run test:sim   (run `npm run build` first)
 import { createRequire } from 'node:module';
@@ -163,7 +163,8 @@ click(Array.prototype.find.call($('modes').children, b => b.textContent === 'Wav
 const wv = w.__ms.WV;
 check($('lookBadge').textContent.includes('Wave') && !$('foldRow').hidden, 'Wave mode is selectable and shows Folds: ' + $('lookBadge').textContent);
 check(Math.max(...wv.hist) > .3, 'Wave: kicks travel through the level history (peak ' + Math.max(...wv.hist).toFixed(2) + ')');
-check(wv.tex[64 * 4] > 20 && wv.tex[64 * 4 + 3] === 255, 'Wave: the spectrum stands in the picture (bass in the middle ' + wv.tex[64 * 4] + ')');
+const specPeak = Math.max(...Array.from({ length: 128 }, (_, i) => wv.tex[i * 4]));
+check(specPeak > 60 && wv.tex[64 * 4 + 3] === 255, 'Wave: the spectrum stands in the picture (peak ' + specPeak + ' of 255)');
 
 // VHS: the mode brings the tape with it; the Tape fader lays it over any other mode
 click(Array.prototype.find.call($('modes').children, b => b.textContent === 'VHS')); await run(.5);
@@ -173,6 +174,34 @@ check(w.__ms.U.tape < .01, 'leaving VHS takes the tape off');
 const tape = $('f-tape'); tape.value = '0.5'; tape.dispatchEvent(new w.Event('input')); await run(1);
 check(Math.abs(w.__ms.U.tape - .5) < .03, 'the Tape fader lays tape over another mode (tape ' + w.__ms.U.tape.toFixed(2) + ')');
 tape.value = '0'; tape.dispatchEvent(new w.Event('input'));
+
+// the hands: keys and drags push offsets on top of the look; they spring back, or stay with Latch; Auto is left alone
+const HAND = w.__ms.HAND;
+const key = (type, k, o) => w.document.dispatchEvent(new w.KeyboardEvent(type, Object.assign({ key: k, bubbles: true }, o)));
+const ptr = (type, x, y) => $('view').dispatchEvent(new w.MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }));
+if ($('autoT').getAttribute('aria-pressed') === 'false') click($('autoT'));
+key('keydown', 'ArrowUp'); await run(.7);
+check(HAND.v.zoom > .4 && $('pad').classList.contains('on'), 'holding the up arrow zooms in (hand ' + HAND.v.zoom.toFixed(2) + ')');
+key('keyup', 'ArrowUp'); await run(1.6);
+check(Math.abs(HAND.v.zoom) < .03 && !$('pad').classList.contains('on'), 'letting go springs back (hand ' + HAND.v.zoom.toFixed(3) + ')');
+key('keydown', 'ArrowRight', { shiftKey: true }); await run(.5); key('keyup', 'ArrowRight');
+check(HAND.v.trails > .3 && Math.abs(HAND.v.spin) < .01, 'Shift + arrow plays trails, not spin (trails ' + HAND.v.trails.toFixed(2) + ')');
+await run(1.6);
+click($('latchT2'));
+key('keydown', 'ArrowRight'); await run(.5); key('keyup', 'ArrowRight'); await run(1.2);
+check(HAND.v.spin > .35 && $('latchT').getAttribute('aria-pressed') === 'true', 'with Latch the hand stays where it was left (spin ' + HAND.v.spin.toFixed(2) + ')');
+key('keydown', '0'); await run(.8);
+check(Math.abs(HAND.v.spin) < .03, '0 brings the hands back to the centre');
+click($('latchT2'));
+const wasPaused = audioEl[0].paused;
+ptr('pointerdown', 100, 100); ptr('pointermove', 130, 70); await run(.4);
+check(HAND.v.spin > .3 && HAND.v.zoom > .3, 'dragging on the picture turns and zooms (' + HAND.v.spin.toFixed(2) + ', ' + HAND.v.zoom.toFixed(2) + ')');
+ptr('pointerup', 130, 70); click($('view')); await run(1.6);
+check(audioEl[0].paused === wasPaused && Math.abs(HAND.v.spin) < .03, 'a drag does not pause the sound, and the picture comes back');
+ptr('pointerdown', 100, 100); ptr('pointerup', 100, 100); click($('view'));
+check(audioEl[0].paused !== wasPaused, 'a tap on the picture still plays and pauses');
+ptr('pointerdown', 100, 100); ptr('pointerup', 100, 100); click($('view')); await run(.2);
+check($('autoT').getAttribute('aria-pressed') === 'true', 'the hands leave Auto on');
 
 // kept looks: keep one, change everything, bring it back, remove it, undo
 click($('dirs').children[2]); await run(.2);                                  // Neon

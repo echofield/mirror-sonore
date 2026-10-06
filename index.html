@@ -25,6 +25,7 @@
   <section class="stage" id="stage" aria-label="Preview">
     <div class="monitor" id="monitor">
       <canvas id="view" width="720" height="1280" aria-label="Live visual preview"></canvas>
+      <div class="pad" id="pad" aria-hidden="true"><i></i><b></b></div>
       <div class="safe" id="safe" hidden><i class="s-top"></i><i class="s-bot"></i><i class="s-rail"></i><span>Covered by TikTok UI</span></div>
       <span class="lookbadge" id="lookBadge">Picture · Kaleido</span>
       <button class="bigplay" id="bigPlay" type="button" disabled>
@@ -57,6 +58,7 @@
         <button class="qbtn" id="shuffle" type="button" aria-label="Shuffle the look">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 3l1 2c1 2 2 3 4 3H17M14.5 11.5 17 14l-2.5 2.5M3 14h3.5c1.2 0 2-.4 2.7-1.1M11.8 7.1C12.5 6.4 13.3 6 14.5 6H17M14.5 3.5 17 6l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Shuffle</span>
         </button>
+        <button class="switch" id="latchT" type="button" aria-pressed="false"><i></i>Latch</button>
       </div>
       <div class="mini" id="miniTrips" role="group" aria-label="Trip"></div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
@@ -146,6 +148,10 @@
 
     <section class="sec" data-tab="look">
       <h2 class="lab">Look</h2>
+      <div class="handbox autorow">
+        <button class="switch" id="latchT2" type="button" aria-pressed="false"><i></i>Latch</button>
+        <p class="note">Play the picture with your hands. Drag on it: sideways turns it, up and down zooms. Two fingers set trails and warp. Let go and it comes back; with Latch it stays.</p>
+      </div>
       <div class="pumpbox">
         <div class="opt"><span>Pump</span><div class="seg sm" id="pumpStyle" role="group" aria-label="Pump style"></div></div>
         <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
@@ -179,7 +185,7 @@
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · I image · K keep · S shuffle · A auto · T trip · P pump style · F full screen · 1–9 modes</p>
+      <p class="keys">Space play · R record · I image · K keep · S shuffle · A auto · T trip · P pump style · F full screen · 1–9 modes<br>Arrows turn and zoom · Shift + arrows trails and warp · 0 centre · L latch</p>
     </section>
   </aside>
 </div>

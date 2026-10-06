@@ -4,7 +4,7 @@
 //   V.pump — the kick "sidechaining" the picture (zoom, brightness, contrast), shaped by PUMP.style/len
 //   V.flow — continuous motion driven by the music
 // Pump is the only place the kick or bass moves zoom and brightness, so Pump Off means no pumping.
-import { A, S, V, P, U, G, BEAT, PUMP, WV, WAVE_N } from './state.js';
+import { A, S, V, P, U, G, BEAT, PUMP, WV, WAVE_N, HAND } from './state.js';
 import { KEYS, HOLO, WAVE, VHS, PUMP_LENGTHS, ECHO_RATES } from './config.js';
 
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
@@ -53,13 +53,16 @@ export function step(dt) {
   G.easeTau = Math.max(.1, G.easeTau - dt * .25);
 
   const Bt = V.beat, F = V.flow;
+  // the look's spin, zoom, warp and trails with the hands on top (a full push doubles or halves the zoom)
+  const spin = clamp(V.spin + 1.2 * HAND.v.spin, -2, 2), zoom = V.zoom * Math.pow(2, HAND.v.zoom);
+  const warp = clamp(V.warp + .8 * HAND.v.warp, 0, 1.6), trails = clamp(V.trails + .6 * HAND.v.trails, 0, .97);
   const k = A.kick * V.punch * Bt, sn = A.snare * Bt, ht = A.hat * Math.min(1, Bt + .3), drop = A.drop * Bt, cut = A.cut * Bt;
   const lo = clamp(A.low * F), mi = clamp(A.mid * F), hi = clamp(A.high * F), lv = clamp(A.lvl * F);
   const sl = G.reduced ? .4 : 1, f60 = dt * 60;
 
   S.morph *= Math.exp(-dt * 1.6);
   S.t += dt * (.3 + 1.6 * lv + .8 * k) * sl;
-  S.rot += dt * (V.spin * (.2 + 1.3 * lv) + S.rotV) * sl;
+  S.rot += dt * (spin * (.2 + 1.3 * lv) + S.rotV) * sl;
   S.rotV *= Math.exp(-dt * 3.5);
   S.drift += dt * (.05 + .25 * lv) * sl;
   S.tun += dt * (.1 + .9 * lv + 2.2 * k) * sl;
@@ -74,18 +77,18 @@ export function step(dt) {
   S.tiltPh += dt * (.12 + .5 * lv) * sl;
 
   const pm = pumpShape(dt, F);
-  U.zoom = V.zoom * (1 + pm.z + .05 * sn * V.punch + .2 * drop);
-  U.warp = V.warp * (.25 + 1.1 * mi) + .1 * k + (P.mode === HOLO ? .3 * lo * V.warp : 0);
-  U.twist = V.warp * (.9 * Math.sin(S.t * .27) + 2 * mi) + .6 * k;
+  U.zoom = zoom * (1 + pm.z + .05 * sn * V.punch + .2 * drop);
+  U.warp = warp * (.25 + 1.1 * mi) + .1 * k + (P.mode === HOLO ? .3 * lo * warp : 0);
+  U.twist = warp * (.9 * Math.sin(S.t * .27) + 2 * mi) + .6 * k;
   U.chroma = .3 + 5 * k + 3 * sn * V.glitch + 2 * hi + 3 * cut;
   U.bright = Math.max(.3, .96 + pm.b + .55 * drop + .35 * cut);
   U.contrast = 1.04 + pm.c;
   U.sat = 1 + .3 * hi + ({ Ink: 0, Original: 0, Picture: .05 }[G.dir] ?? .12);
   // Trails; a Morph transition temporarily holds the old frame so looks dissolve into each other.
-  const trailBase = clamp(V.trails * (1 - .55 * k - .5 * cut), 0, .97);
+  const trailBase = clamp(trails * (1 - .55 * k - .5 * cut), 0, .97);
   U.trail = Math.max(Math.pow(trailBase, f60), Math.pow(.94, f60) * S.morph);
-  U.fb = 1 + (.003 + .028 * k + .008 * lo) * f60 * (V.trails > .01 || S.morph > .05 ? 1 : 0);
-  U.fbRot = V.spin * .003 * f60;
+  U.fb = 1 + (.003 + .028 * k + .008 * lo) * f60 * (trails > .01 || S.morph > .05 ? 1 : 0);
+  U.fbRot = spin * .003 * f60;
   U.dx = .32 * Math.sin(S.drift * 1.3 + S.seed); U.dy = .32 * Math.cos(S.drift * .9 + S.seed * 1.7);
   U.slice = V.glitch * (sn * .9 + drop * 1.2 + cut * .6);
   U.holo = clamp(V.holo + .15 * hi);
@@ -108,8 +111,8 @@ export function step(dt) {
   const sh = Math.min(WAVE_N, Math.floor(S.waveAcc)); S.waveAcc -= Math.floor(S.waveAcc);
   if (sh > 0) { WV.hist.copyWithin(sh, 0); WV.hist.fill(clamp(.6 * lo + .9 * k), 0, sh); }
   S.waveT = (S.waveT + dt / span) % 2;
-  S.waveX += dt * V.spin * .28 * (.25 + lv) * sl;
-  U.waveAmp = V.warp * (.7 + .5 * mi);
+  S.waveX += dt * spin * .28 * (.25 + lv) * sl;
+  U.waveAmp = warp * (.7 + .5 * mi);
   if (P.mode === WAVE) {
     const top = A.spec.length - 1;
     for (let i = 0; i < WAVE_N; i++) {

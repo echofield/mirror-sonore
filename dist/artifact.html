@@ -61,7 +61,15 @@ svg{display:block}
 /* stage */
 .stage{grid-area:stage;display:flex;flex-direction:column;align-items:center;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);min-width:0}
 .monitor{position:relative;width:min(100%,max(220px,calc((100vh - 440px) * var(--arn))));aspect-ratio:var(--ar);background:var(--pic);border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px var(--ink);cursor:pointer;touch-action:manipulation}
-.monitor canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.monitor canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+/* the hands, drawn over the picture and never recorded: the ring is spin and zoom, the square trails and warp */
+.pad{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity var(--t2);--x:0%;--y:0%;--x2:0%;--y2:0%}
+.pad.on{opacity:1}
+.pad::before,.pad::after{content:"";position:absolute;background:var(--pic-fg);box-shadow:0 0 0 1px var(--pic-shade)}
+.pad::before{left:50%;top:calc(50% - 9px);width:1px;height:18px}
+.pad::after{top:50%;left:calc(50% - 9px);height:1px;width:18px}
+.pad i{position:absolute;left:calc(50% + var(--x));top:calc(50% - var(--y));width:24px;height:24px;margin:-12px 0 0 -12px;border:2px solid var(--pic-fg);border-radius:50%;box-shadow:0 0 0 1px var(--pic-shade),inset 0 0 0 1px var(--pic-shade)}
+.pad b{position:absolute;left:calc(50% + var(--x2));top:calc(50% - var(--y2));width:9px;height:9px;margin:-4.5px 0 0 -4.5px;background:var(--pic-fg);box-shadow:0 0 0 1px var(--pic-shade)}
 .monitor.flash::after{content:"";position:absolute;inset:0;background:var(--pic-fg);pointer-events:none;animation:flash var(--t2) ease-out forwards}
 @keyframes flash{from{opacity:.85}to{opacity:0}}
 .bigplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:10px;min-height:44px;padding:0 20px 0 16px;border:1px solid var(--pic-line);border-radius:2px;background:var(--pic-shade);color:var(--pic-fg);font-weight:600;font-size:15px;white-space:nowrap;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -182,6 +190,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .check{display:flex;gap:10px;align-items:center;min-height:36px;font-size:13.5px;cursor:pointer}
 .check input{width:16px;height:16px;accent-color:var(--blue)}
 .pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.handbox{padding-bottom:12px;border-bottom:1px solid var(--line)}
 .tripdesc{margin:0;font-family:var(--f-voice);font-size:17px;line-height:1.35;min-height:2.7em;text-wrap:pretty}
 .autorow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
 
@@ -240,6 +249,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
   .macro label{font-size:13px}
   .quick{gap:6px;flex-wrap:nowrap}
   .switch,.qbtn{min-height:40px}
+  #latchT{display:none}
   #shuffle{padding:0;width:44px;justify-content:center}
   #shuffle span{display:none}
   #shuffle svg{width:17px;height:17px}
@@ -273,14 +283,15 @@ body.immersive .stage{--paper:#0E0F11;--well:rgba(23,24,28,.72);--ink:#F4F4F2;--
   position:fixed;inset:0;z-index:40;margin:0;padding:0;border:0;background:var(--pic);color:var(--ink);display:block;top:0}
 body.immersive .monitor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:auto;max-width:none;height:min(100vh,calc(100vw / var(--arn)));border-radius:0;box-shadow:none;cursor:default}
 @supports (height:1dvh){ body.immersive .monitor{height:min(100dvh,calc(100vw / var(--arn)))} }
-body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.84) 36%);gap:10px;transition:opacity var(--t2)}
+body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.84) 36%);gap:8px;transition:opacity var(--t2)}
 body.immersive .side > *{width:100%;max-width:640px;margin-inline:auto}
 body.immersive .macros{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 14px}
 body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px}
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .acts{position:static;padding:0;border:0;background:none}
 body.immersive .exitfs{display:grid}
-body.immersive .tabs,body.immersive .meters,body.immersive #fsBtn,body.immersive .bpm{display:none}
+body.immersive .tabs,body.immersive .meters,body.immersive .leds,body.immersive #fsBtn{display:none}
+body.immersive #latchT{display:inline-flex}
 body.immersive #shuffle{width:auto;padding:0 12px 0 10px}
 body.immersive #shuffle span{display:inline}
 body.immersive.ui-off .side,body.immersive.ui-off .exitfs,body.immersive.ui-off .lookbadge{opacity:0;pointer-events:none}
@@ -295,7 +306,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
 
 @media (prefers-reduced-motion:reduce){
   .recbadge i,.kt.new,.monitor.flash::after{animation:none}
-  .switch i::after,.side,.corner,.lookbadge,.kt{transition:none}
+  .switch i::after,.side,.corner,.lookbadge,.kt,.pad{transition:none}
 }
 </style>
 
@@ -311,6 +322,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
   <section class="stage" id="stage" aria-label="Preview">
     <div class="monitor" id="monitor">
       <canvas id="view" width="720" height="1280" aria-label="Live visual preview"></canvas>
+      <div class="pad" id="pad" aria-hidden="true"><i></i><b></b></div>
       <div class="safe" id="safe" hidden><i class="s-top"></i><i class="s-bot"></i><i class="s-rail"></i><span>Covered by TikTok UI</span></div>
       <span class="lookbadge" id="lookBadge">Picture · Kaleido</span>
       <button class="bigplay" id="bigPlay" type="button" disabled>
@@ -343,6 +355,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
         <button class="qbtn" id="shuffle" type="button" aria-label="Shuffle the look">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 3l1 2c1 2 2 3 4 3H17M14.5 11.5 17 14l-2.5 2.5M3 14h3.5c1.2 0 2-.4 2.7-1.1M11.8 7.1C12.5 6.4 13.3 6 14.5 6H17M14.5 3.5 17 6l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Shuffle</span>
         </button>
+        <button class="switch" id="latchT" type="button" aria-pressed="false"><i></i>Latch</button>
       </div>
       <div class="mini" id="miniTrips" role="group" aria-label="Trip"></div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
@@ -432,6 +445,10 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
 
     <section class="sec" data-tab="look">
       <h2 class="lab">Look</h2>
+      <div class="handbox autorow">
+        <button class="switch" id="latchT2" type="button" aria-pressed="false"><i></i>Latch</button>
+        <p class="note">Play the picture with your hands. Drag on it: sideways turns it, up and down zooms. Two fingers set trails and warp. Let go and it comes back; with Latch it stays.</p>
+      </div>
       <div class="pumpbox">
         <div class="opt"><span>Pump</span><div class="seg sm" id="pumpStyle" role="group" aria-label="Pump style"></div></div>
         <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
@@ -465,7 +482,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · I image · K keep · S shuffle · A auto · T trip · P pump style · F full screen · 1–9 modes</p>
+      <p class="keys">Space play · R record · I image · K keep · S shuffle · A auto · T trip · P pump style · F full screen · 1–9 modes<br>Arrows turn and zoom · Shift + arrows trails and warp · 0 centre · L latch</p>
     </section>
   </aside>
 </div>
@@ -710,6 +727,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
   };
   var WAVE_N = 128;
   var WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N * 4) };
+  var HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0, zoom: 0, warp: 0, trails: 0 }, latch: false, active: false };
   var PUMP = { style: "Punch", len: "1/8" };
   var A = {
     low: 0,
@@ -765,6 +783,124 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     recLen: 0
     // position inside the clip being recorded (-1 when not recording)
   };
+
+  // src/hands.js
+  var NAMES = ["spin", "zoom", "warp", "trails"];
+  var ARROWS = { ArrowLeft: [-1, "spin", "trails"], ArrowRight: [1, "spin", "trails"], ArrowUp: [1, "zoom", "warp"], ArrowDown: [-1, "zoom", "warp"] };
+  var KEY_RATE = 1.15;
+  var clamp1 = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
+  var keys = {};
+  var pts = /* @__PURE__ */ new Map();
+  var base = { spin: 0, zoom: 0, warp: 0, trails: 0 };
+  var view = null;
+  var pad = null;
+  var onLatch = null;
+  var dragged = false;
+  var padOn = false;
+  function rebase() {
+    base = { ...HAND.t };
+    pts.forEach((p) => {
+      p.x0 = p.x;
+      p.y0 = p.y;
+    });
+  }
+  function initHands(canvas3, padEl, latchCb) {
+    view = canvas3;
+    pad = padEl;
+    onLatch = latchCb;
+    view.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      try {
+        view.setPointerCapture(e.pointerId);
+      } catch (err) {
+      }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
+      rebase();
+      if (pts.size === 1) dragged = false;
+    });
+    view.addEventListener("pointermove", (e) => {
+      const p = pts.get(e.pointerId);
+      if (!p) return;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      let dx = 0, dy = 0;
+      pts.forEach((q) => {
+        dx += q.x - q.x0;
+        dy += q.y - q.y0;
+      });
+      dx /= pts.size;
+      dy /= pts.size;
+      if (!dragged && Math.abs(dx) + Math.abs(dy) < 8) return;
+      dragged = true;
+      const r = view.getBoundingClientRect(), span = Math.max(60, Math.min(r.width, r.height) * 0.6);
+      if (pts.size === 1) {
+        HAND.t.spin = clamp1(base.spin + dx / span);
+        HAND.t.zoom = clamp1(base.zoom - dy / span);
+      } else {
+        HAND.t.trails = clamp1(base.trails + dx / span);
+        HAND.t.warp = clamp1(base.warp - dy / span);
+      }
+    });
+    const up = (e) => {
+      if (pts.delete(e.pointerId)) rebase();
+    };
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((t) => view.addEventListener(t, up));
+    window.addEventListener("blur", () => {
+      Object.keys(keys).forEach((k) => {
+        delete keys[k];
+      });
+      pts.clear();
+    });
+  }
+  function wasDrag() {
+    const d = dragged;
+    dragged = false;
+    return d;
+  }
+  function handKey(e, down) {
+    const a = ARROWS[e.key];
+    if (!a) return false;
+    if (down) keys[e.key] = e.shiftKey ? a[2] : a[1];
+    else delete keys[e.key];
+    return true;
+  }
+  function setLatch(on2) {
+    HAND.latch = !!on2;
+    if (onLatch) onLatch(HAND.latch);
+  }
+  function centreHands() {
+    NAMES.forEach((n) => {
+      HAND.t[n] = 0;
+    });
+    rebase();
+  }
+  function handTick(dt) {
+    const driven = { spin: pts.size > 0, zoom: pts.size > 0, warp: pts.size > 1, trails: pts.size > 1 };
+    for (const key in keys) {
+      const n = keys[key];
+      HAND.t[n] = clamp1(HAND.t[n] + ARROWS[key][0] * KEY_RATE * dt);
+      driven[n] = true;
+    }
+    const back = 1 - Math.exp(-dt / 0.22), follow = 1 - Math.exp(-dt / 0.07);
+    let mag = 0;
+    NAMES.forEach((n) => {
+      if (!driven[n] && !HAND.latch) HAND.t[n] -= HAND.t[n] * back;
+      HAND.v[n] += (HAND.t[n] - HAND.v[n]) * follow;
+      if (Math.abs(HAND.v[n]) < 1e-4 && Math.abs(HAND.t[n]) < 1e-4) HAND.v[n] = HAND.t[n] = 0;
+      mag = Math.max(mag, Math.abs(HAND.v[n]));
+    });
+    HAND.active = mag > 0.012;
+    if (!pad) return;
+    if (HAND.active !== padOn) {
+      padOn = HAND.active;
+      pad.classList.toggle("on", padOn);
+    }
+    if (!padOn) return;
+    pad.style.setProperty("--x", (HAND.v.spin * 40).toFixed(2) + "%");
+    pad.style.setProperty("--y", (HAND.v.zoom * 40).toFixed(2) + "%");
+    pad.style.setProperty("--x2", (HAND.v.trails * 40).toFixed(2) + "%");
+    pad.style.setProperty("--y2", (HAND.v.warp * 40).toFixed(2) + "%");
+  }
 
   // src/gl/shaders.js
   var VS = "attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }";
@@ -1532,7 +1668,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       o.start(t);
       o.stop(t + d + 0.02);
     }
-    function pad(t, fs, d) {
+    function pad2(t, fs, d) {
       const g = ctx.createGain();
       g.gain.setValueAtTime(1e-4, t);
       g.gain.exponentialRampToValueAtTime(0.06, t + 0.8);
@@ -1568,7 +1704,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     }
     const chords = [[220, 261.63, 329.63], [174.61, 220, 261.63], [261.63, 329.63, 392], [196, 246.94, 293.66]];
     const roots = [55, 43.65, 65.41, 49];
-    for (let c = 0; c < 4; c++) pad(c * 4, chords[c], 4);
+    for (let c = 0; c < 4; c++) pad2(c * 4, chords[c], 4);
     for (let bar = 0; bar < 8; bar++) {
       const t0 = bar * 2, ci = Math.floor(bar / 2), brk = bar === 4 || bar === 5;
       for (let b = 0; b < 4; b++) {
@@ -1789,12 +1925,14 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     for (const k2 of KEYS) V[k2] += (P[k2] - V[k2]) * a;
     G.easeTau = Math.max(0.1, G.easeTau - dt * 0.25);
     const Bt = V.beat, F = V.flow;
+    const spin = clamp2(V.spin + 1.2 * HAND.v.spin, -2, 2), zoom = V.zoom * Math.pow(2, HAND.v.zoom);
+    const warp = clamp2(V.warp + 0.8 * HAND.v.warp, 0, 1.6), trails = clamp2(V.trails + 0.6 * HAND.v.trails, 0, 0.97);
     const k = A.kick * V.punch * Bt, sn = A.snare * Bt, ht = A.hat * Math.min(1, Bt + 0.3), drop = A.drop * Bt, cut = A.cut * Bt;
     const lo = clamp2(A.low * F), mi = clamp2(A.mid * F), hi = clamp2(A.high * F), lv = clamp2(A.lvl * F);
     const sl = G.reduced ? 0.4 : 1, f60 = dt * 60;
     S.morph *= Math.exp(-dt * 1.6);
     S.t += dt * (0.3 + 1.6 * lv + 0.8 * k) * sl;
-    S.rot += dt * (V.spin * (0.2 + 1.3 * lv) + S.rotV) * sl;
+    S.rot += dt * (spin * (0.2 + 1.3 * lv) + S.rotV) * sl;
     S.rotV *= Math.exp(-dt * 3.5);
     S.drift += dt * (0.05 + 0.25 * lv) * sl;
     S.tun += dt * (0.1 + 0.9 * lv + 2.2 * k) * sl;
@@ -1807,17 +1945,17 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     S.poke[2] += dt;
     S.tiltPh += dt * (0.12 + 0.5 * lv) * sl;
     const pm = pumpShape(dt, F);
-    U.zoom = V.zoom * (1 + pm.z + 0.05 * sn * V.punch + 0.2 * drop);
-    U.warp = V.warp * (0.25 + 1.1 * mi) + 0.1 * k + (P.mode === HOLO ? 0.3 * lo * V.warp : 0);
-    U.twist = V.warp * (0.9 * Math.sin(S.t * 0.27) + 2 * mi) + 0.6 * k;
+    U.zoom = zoom * (1 + pm.z + 0.05 * sn * V.punch + 0.2 * drop);
+    U.warp = warp * (0.25 + 1.1 * mi) + 0.1 * k + (P.mode === HOLO ? 0.3 * lo * warp : 0);
+    U.twist = warp * (0.9 * Math.sin(S.t * 0.27) + 2 * mi) + 0.6 * k;
     U.chroma = 0.3 + 5 * k + 3 * sn * V.glitch + 2 * hi + 3 * cut;
     U.bright = Math.max(0.3, 0.96 + pm.b + 0.55 * drop + 0.35 * cut);
     U.contrast = 1.04 + pm.c;
     U.sat = 1 + 0.3 * hi + ((_a = { Ink: 0, Original: 0, Picture: 0.05 }[G.dir]) != null ? _a : 0.12);
-    const trailBase = clamp2(V.trails * (1 - 0.55 * k - 0.5 * cut), 0, 0.97);
+    const trailBase = clamp2(trails * (1 - 0.55 * k - 0.5 * cut), 0, 0.97);
     U.trail = Math.max(Math.pow(trailBase, f60), Math.pow(0.94, f60) * S.morph);
-    U.fb = 1 + (3e-3 + 0.028 * k + 8e-3 * lo) * f60 * (V.trails > 0.01 || S.morph > 0.05 ? 1 : 0);
-    U.fbRot = V.spin * 3e-3 * f60;
+    U.fb = 1 + (3e-3 + 0.028 * k + 8e-3 * lo) * f60 * (trails > 0.01 || S.morph > 0.05 ? 1 : 0);
+    U.fbRot = spin * 3e-3 * f60;
     U.dx = 0.32 * Math.sin(S.drift * 1.3 + S.seed);
     U.dy = 0.32 * Math.cos(S.drift * 0.9 + S.seed * 1.7);
     U.slice = V.glitch * (sn * 0.9 + drop * 1.2 + cut * 0.6);
@@ -1842,8 +1980,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       WV.hist.fill(clamp2(0.6 * lo + 0.9 * k), 0, sh);
     }
     S.waveT = (S.waveT + dt / span) % 2;
-    S.waveX += dt * V.spin * 0.28 * (0.25 + lv) * sl;
-    U.waveAmp = V.warp * (0.7 + 0.5 * mi);
+    S.waveX += dt * spin * 0.28 * (0.25 + lv) * sl;
+    U.waveAmp = warp * (0.7 + 0.5 * mi);
     if (P.mode === WAVE) {
       const top = A.spec.length - 1;
       for (let i = 0; i < WAVE_N; i++) {
@@ -1994,6 +2132,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       "keepBtn",
       "kept",
       "keptNote",
+      "pad",
+      "latchT",
+      "latchT2",
       "lKick",
       "lSnare",
       "lHat",
@@ -2127,8 +2268,15 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     Array.prototype.forEach.call(el.tabs.children, (b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
     const want = (location.hash || "").slice(1);
     setTab(Array.prototype.some.call(el.tabs.children, (b) => b.dataset.tab === want) ? want : "sources");
+    const latches = [el.latchT, el.latchT2];
+    initHands(el.view, el.pad, (on2) => latches.forEach((b) => b.setAttribute("aria-pressed", String(on2))));
+    latches.forEach((b) => b.addEventListener("click", () => setLatch(!HAND.latch)));
+    document.addEventListener("pointerup", (e) => {
+      const t = e.target;
+      if (t && t.tagName === "INPUT" && t.type === "range" && e.pointerType === "mouse") t.blur();
+    });
     el.monitor.addEventListener("click", (e) => {
-      if (e.target !== el.view) return;
+      if (e.target !== el.view || wasDrag()) return;
       if (document.body.classList.contains("immersive")) {
         toggleOverlay();
         return;
@@ -2314,7 +2462,20 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       el.bigPlay.hidden = true;
     } else syncExport();
   }
+  var hinted = false;
+  function hintHands() {
+    if (hinted) return;
+    hinted = true;
+    try {
+      if (localStorage.getItem("miroir-sonore.hint.v1")) return;
+      localStorage.setItem("miroir-sonore.hint.v1", "1");
+    } catch (e) {
+    }
+    const fine = typeof matchMedia === "function" && matchMedia("(pointer:fine)").matches;
+    toast(fine ? "Drag on the picture to play it, or hold the arrow keys." : "Drag on the picture to play it.");
+  }
   function setPlaying(playing) {
+    if (playing) hintHands();
     el.playIcon.setAttribute("d", playing ? "M5 3h3.5v14H5zM11.5 3H15v14h-3.5z" : "M5 3l12 7-12 7z");
     el.playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
     if (playing) el.bigPlay.hidden = true;
@@ -2463,7 +2624,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   }
   function poke(e) {
     if (!document.body.classList.contains("immersive")) return;
-    if (e && e.type === "pointerdown" && e.target === el.view) return;
+    if (e && e.target === el.view && (e.type === "pointerdown" || e.buttons || e.pointerType === "touch")) return;
     document.body.classList.remove("ui-off");
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
@@ -2558,13 +2719,19 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       const tag = e.target && e.target.tagName || "";
       if (tag === "INPUT" && e.target.type !== "range") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (tag !== "INPUT" && tag !== "SELECT" && handKey(e, true)) {
+        e.preventDefault();
+        return;
+      }
       const k = e.key;
       if (e.code === "Space" && tag !== "BUTTON") {
         e.preventDefault();
         H.togglePlay();
       } else if (k === "r" || k === "R") {
         if (!el.recBtn.disabled) H.toggleRecord();
-      } else if (k === "i" || k === "I") H.takeStill();
+      } else if (k === "0") centreHands();
+      else if (k === "l" || k === "L") setLatch(!HAND.latch);
+      else if (k === "i" || k === "I") H.takeStill();
       else if (k === "k" || k === "K") keep();
       else if (k === "s" || k === "S") shuffle();
       else if (k === "a" || k === "A") setAuto(!AUTO.on);
@@ -2573,6 +2740,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       else if (k === "f" || k === "F") setImmersive(!document.body.classList.contains("immersive"));
       else if (k === "Escape" && document.body.classList.contains("immersive")) setImmersive(false);
       else if (/^[1-9]$/.test(k) && parseInt(k, 10) <= MODES.length) setMode(parseInt(k, 10) - 1);
+    });
+    document.addEventListener("keyup", (e) => {
+      handKey(e, false);
     });
   }
 
@@ -3211,6 +3381,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     analyse(dt);
     syncVideo(playing);
     autoTick(playing);
+    handTick(dt);
     step(dt);
     render(now);
     updateHUD(audio, scrubbing);
@@ -3218,7 +3389,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     adaptQuality(dt, now, SESSION.active);
     requestAnimationFrame(frame);
   }
-  if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV };
+  if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV, HAND };
   boot();
 })();
 </script>

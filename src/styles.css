@@ -56,7 +56,15 @@ svg{display:block}
 /* stage */
 .stage{grid-area:stage;display:flex;flex-direction:column;align-items:center;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);min-width:0}
 .monitor{position:relative;width:min(100%,max(220px,calc((100vh - 440px) * var(--arn))));aspect-ratio:var(--ar);background:var(--pic);border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px var(--ink);cursor:pointer;touch-action:manipulation}
-.monitor canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.monitor canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+/* the hands, drawn over the picture and never recorded: the ring is spin and zoom, the square trails and warp */
+.pad{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity var(--t2);--x:0%;--y:0%;--x2:0%;--y2:0%}
+.pad.on{opacity:1}
+.pad::before,.pad::after{content:"";position:absolute;background:var(--pic-fg);box-shadow:0 0 0 1px var(--pic-shade)}
+.pad::before{left:50%;top:calc(50% - 9px);width:1px;height:18px}
+.pad::after{top:50%;left:calc(50% - 9px);height:1px;width:18px}
+.pad i{position:absolute;left:calc(50% + var(--x));top:calc(50% - var(--y));width:24px;height:24px;margin:-12px 0 0 -12px;border:2px solid var(--pic-fg);border-radius:50%;box-shadow:0 0 0 1px var(--pic-shade),inset 0 0 0 1px var(--pic-shade)}
+.pad b{position:absolute;left:calc(50% + var(--x2));top:calc(50% - var(--y2));width:9px;height:9px;margin:-4.5px 0 0 -4.5px;background:var(--pic-fg);box-shadow:0 0 0 1px var(--pic-shade)}
 .monitor.flash::after{content:"";position:absolute;inset:0;background:var(--pic-fg);pointer-events:none;animation:flash var(--t2) ease-out forwards}
 @keyframes flash{from{opacity:.85}to{opacity:0}}
 .bigplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:10px;min-height:44px;padding:0 20px 0 16px;border:1px solid var(--pic-line);border-radius:2px;background:var(--pic-shade);color:var(--pic-fg);font-weight:600;font-size:15px;white-space:nowrap;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -177,6 +185,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .check{display:flex;gap:10px;align-items:center;min-height:36px;font-size:13.5px;cursor:pointer}
 .check input{width:16px;height:16px;accent-color:var(--blue)}
 .pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.handbox{padding-bottom:12px;border-bottom:1px solid var(--line)}
 .tripdesc{margin:0;font-family:var(--f-voice);font-size:17px;line-height:1.35;min-height:2.7em;text-wrap:pretty}
 .autorow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
 
@@ -235,6 +244,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
   .macro label{font-size:13px}
   .quick{gap:6px;flex-wrap:nowrap}
   .switch,.qbtn{min-height:40px}
+  #latchT{display:none}
   #shuffle{padding:0;width:44px;justify-content:center}
   #shuffle span{display:none}
   #shuffle svg{width:17px;height:17px}
@@ -268,14 +278,15 @@ body.immersive .stage{--paper:#0E0F11;--well:rgba(23,24,28,.72);--ink:#F4F4F2;--
   position:fixed;inset:0;z-index:40;margin:0;padding:0;border:0;background:var(--pic);color:var(--ink);display:block;top:0}
 body.immersive .monitor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:auto;max-width:none;height:min(100vh,calc(100vw / var(--arn)));border-radius:0;box-shadow:none;cursor:default}
 @supports (height:1dvh){ body.immersive .monitor{height:min(100dvh,calc(100vw / var(--arn)))} }
-body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.84) 36%);gap:10px;transition:opacity var(--t2)}
+body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.84) 36%);gap:8px;transition:opacity var(--t2)}
 body.immersive .side > *{width:100%;max-width:640px;margin-inline:auto}
 body.immersive .macros{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 14px}
 body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px}
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .acts{position:static;padding:0;border:0;background:none}
 body.immersive .exitfs{display:grid}
-body.immersive .tabs,body.immersive .meters,body.immersive #fsBtn,body.immersive .bpm{display:none}
+body.immersive .tabs,body.immersive .meters,body.immersive .leds,body.immersive #fsBtn{display:none}
+body.immersive #latchT{display:inline-flex}
 body.immersive #shuffle{width:auto;padding:0 12px 0 10px}
 body.immersive #shuffle span{display:inline}
 body.immersive.ui-off .side,body.immersive.ui-off .exitfs,body.immersive.ui-off .lookbadge{opacity:0;pointer-events:none}
@@ -290,5 +301,5 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
 
 @media (prefers-reduced-motion:reduce){
   .recbadge i,.kt.new,.monitor.flash::after{animation:none}
-  .switch i::after,.side,.corner,.lookbadge,.kt{transition:none}
+  .switch i::after,.side,.corner,.lookbadge,.kt,.pad{transition:none}
 }
