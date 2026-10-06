@@ -117,5 +117,5 @@ function frame(now) {
 }
 
 // Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
-if (window.__MS_TEST__) window.__ms = { U, V, S, PUMP, BEAT };
+if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT };
 boot();

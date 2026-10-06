@@ -14,7 +14,8 @@ export const S = {
   seed: Math.random() * 100, sliceSeed: 0, tiltPh: 0,
   poke: [0, 0, 9],   // holo ripple: x, y, age in seconds
   morph: 0,          // 1 right after a Morph transition, decays to 0
-  pumpT: 9           // seconds since the last kick, for the pump envelope
+  pumpT: 9,          // seconds since the last kick, for the pump envelope
+  echoT: 0           // seconds since the last tracer capture
 };
 
 // Pump style and length are the user's, like Beat/Pump/Flow: Auto never changes them.
@@ -47,5 +48,11 @@ export const G = {
   reduced: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
   W: 720, H: 1280,     // output size (what gets recorded)
   scale: 1,            // preview render scale (adaptive; forced to 1 while recording)
-  imgAspect: 1
+  imgAspect: 1,
+  trip: null,          // active trip name, or null
+  echoRate: '1/16',    // tracer refresh, in notes (see ECHO_RATES)
+  journey: true,       // Journey arc: trip intensity builds, peaks and settles over each clip
+  arcT: 0,             // seconds of playback for the Journey wave when not recording
+  arc: 1,              // current Journey intensity (0.5–1)
+  recT: -1, recLen: 0  // position inside the clip being recorded (-1 when not recording)
 };

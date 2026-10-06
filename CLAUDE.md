@@ -24,14 +24,14 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 |---|---|
 | `src/config.js` | Modes, color directions, fader definitions, defaults, export options. Start here for new modes/directions. |
 | `src/state.js` | Shared mutable state objects (see "State" below). Mutate fields; never reassign the exports. |
-| `src/gl/shaders.js` | GLSL ES 1.0. `mainFS` (mode transforms, palette grading, feedback trails) and `postFS` (glow, roll-off, vignette, grain). |
+| `src/gl/shaders.js` | GLSL ES 1.0. `mainFS` (mode transforms, palette grading, trip layer, feedback trails), `postFS` (glow, roll-off, vignette, grain), `copyFS` (tracer capture). |
 | `src/gl/renderer.js` | WebGL1 setup, ping-pong feedback targets (half-float when available), mipmapped image texture, uniform upload. |
 | `src/audio/engine.js` | `<audio>` → analyser graph, band envelopes, spectral-flux onsets (kick/snare/hat), tempo from kick intervals, drop detection. Fires `on.kick/snare/hat/drop`. |
 | `src/audio/sample-loop.js` | Offline-synthesised 16 s demo loop (groove → breakdown → drop) encoded to WAV. |
 | `src/image/palette.js` | k-means palette from the loaded image → the "Picture" direction. |
 | `src/image/sample-image.js` | Generated demo image. |
 | `src/map.js` | Sound → uniforms. Hit reactions (`reactKick`, `reactSnare`) and the per-frame `step`. |
-| `src/auto.js` | Looks, directions, Shuffle, the Auto engine (new look on a kick every N bars and on drops), Morph/Cut transitions. |
+| `src/auto.js` | Looks, directions, trips (`setTrip`), Shuffle, the Auto engine (new look on a kick every N bars and on drops), Morph/Cut transitions. |
 | `src/ui.js` | Builds controls from config, `syncUI`, phone tabs, full screen (CSS immersive + optional Fullscreen API), results list, keyboard. |
 | `src/record.js` | Recording sessions (1/3/5 clips), MediaRecorder, saving (Artifact downloads capability, else share sheet, else download link). |
 | `src/view.js` | Output size from format/quality; adaptive preview scale (1 → .75 → .5 on slow devices, forced to 1 while recording). |
@@ -54,6 +54,15 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 - **Audio graph**: `createMediaElementSource` can be called once per element, so swap `audio.src` instead of making new elements. Create or resume the AudioContext only inside a user gesture (`ensureCtx`). `navigator.audioSession.type = 'playback'` lets iOS play with the silent switch on.
 - **Recording** captures the canvas (`captureStream(30)`) plus the analyser's `MediaStreamDestination`. Call `setOutputScale(1)` before creating the stream. MP4 is preferred and WebM is the fallback.
 
+### Trips (`TRIPS` in config.js)
+Six substance-named art presets (LSD, Psilocybin, DMT, Mescaline, Ayahuasca, Ketamine), built from how the visuals are described in research and trip reports. Each trip sets a palette, the modes Auto may use, a look, a pump style and the **trip layer**:
+- **Geometry** (`lattice`, `latScale`, `latWarp`): Klüver's honeycomb form constant. At `latWarp` 0 it lies flat on the view. At 1 it goes through the eye-to-cortex log-polar map (Bressloff & Cowan 2001), so it becomes a funnel/cobweb lattice flowing toward the centre. The angular cell count is rounded to an integer so the `atan` seam is invisible.
+- **Tracers** (`echo`, `G.echoRate`): a held copy of the output is refreshed in steps (1/16, 1/8 or 1/4 note, and on every kick) and mixed back in. This gives stuttering afterimages, which are different from the smooth feedback trails. The held frame lives in the renderer's `echo` target.
+- **Breathing** (`breath`): slow radial swelling plus an organic bulge applied to the coordinates. It doesn't follow the beat.
+- **Journey** (`G.journey`): the trip layer's intensity `G.arc` builds over the first quarter of each recorded clip, peaks, then eases. While previewing it follows a slow 32 s wave.
+
+Each trip is also registered as a hidden entry in `DIRS`, so its palette and modes flow through the normal direction code; hidden entries don't get Direction chips. Picking a Direction while a trip is on recolors it and keeps the trip layer. Trip "None" turns the layer off.
+
 ### Publishing as a claude.ai Artifact
 `dist/artifact.html` is a fragment: no `<html>/<head>/<body>`, because the Artifact host adds its own skeleton. Inside an Artifact:
 - Only Google Fonts may load from outside. Scripts can come only from the CDN allowlist, so keep everything bundled.
@@ -62,6 +71,7 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 
 ### Recipes
 - **New mode**: add the name to `MODES` (its index is the id). Add a `uMode` branch in `mainFS` (coordinate modes go in the last `else`; modes that compute color directly get their own branch, like Holo and Fractal). Add it to some `DIRS[*].modes`, plus `FOLD_MODES` if it uses folds and any per-mode tweak in `auto.js/lookFor`. Then run `npm test` and check `tests/out/modes.png`.
+- **New trip**: add an entry to `TRIPS` (palette, modes, `fx`, `look`, `tex`, `pump`, `echoRate`, `desc`). The chip, hidden direction and keyboard cycling are automatic. Check it with the trip row of `npm run test:shaders` and the trip loop in `test:sim`.
 - **New direction**: add an entry to `DIRS` with 4 palette colors (dark → light), `mix`, the `modes` it favours, and grain/glow/color defaults. Chips are generated automatically.
 - **New fader**: add a definition to `FEEL`/`TEX`/`FOIL`/`MACROS`, a default in `DEFAULTS`, and the key in `KEYS` if it should ease. Read it in `map.js` or `renderer.js`.
 

@@ -58,6 +58,7 @@
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Full screen
         </button>
       </div>
+      <div class="mini" id="miniTrips" role="group" aria-label="Trip"></div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
       <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
       <div class="mini" id="miniPump" role="group" aria-label="Pump style"></div>
@@ -78,6 +79,7 @@
 
     <nav class="tabs" id="tabs" aria-label="Controls">
       <button type="button" data-tab="sources">Sources</button>
+      <button type="button" data-tab="trip">Trip</button>
       <button type="button" data-tab="direction">Direction</button>
       <button type="button" data-tab="look">Look</button>
       <button type="button" data-tab="color">Color</button>
@@ -103,6 +105,19 @@
         </label>
       </div>
       <p class="note">Or drag files anywhere onto the page. A video file works as a sound source too.</p>
+    </section>
+
+    <section class="sec" data-tab="trip">
+      <h2 class="lab">Trip</h2>
+      <div class="chips" id="trips" role="group" aria-label="Trip"></div>
+      <p class="tripdesc" id="tripDesc"></p>
+      <div class="faders" id="tripfx"></div>
+      <div class="opt"><span>Tracers every</span><div class="seg sm" id="echoRate" role="group" aria-label="Tracer timing in notes"></div></div>
+      <div class="autorow">
+        <button class="switch" id="journeyT" type="button" aria-pressed="true"><i></i>Journey</button>
+        <p class="note">Builds up, peaks, then settles over each clip.</p>
+      </div>
+      <p class="note">Visual styles inspired by how each experience is described in research and trip reports. Pure image and sound, nothing else.</p>
     </section>
 
     <section class="sec" data-tab="direction">
@@ -149,7 +164,7 @@
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · S shuffle · A auto · P pump style · F full screen · 1–7 modes</p>
+      <p class="keys">Space play · R record · S shuffle · A auto · T trip · P pump style · F full screen · 1–7 modes</p>
     </section>
   </aside>
 </div>

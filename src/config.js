@@ -23,6 +23,69 @@ export const DIRS = {
 };
 export const DEFAULT_DIR = 'Picture';
 
+// Trips: art presets built on how people describe the visuals of each substance in research and
+// trip-report catalogues (Klüver's form constants, tracers, breathing surfaces, color enhancement,
+// hyperspace geometry). Each sets a palette, the modes Auto may pick, the trip layer (geometry,
+// tracers, breathing), the look and a pump style. Beat/Pump/Flow amounts stay the user's.
+export const TRIPS = {
+  LSD: {
+    pal: ['#080414', '#ff2fa8', '#ffd23a', '#2de2ff'], mix: .8,
+    modes: [1, 6, 1, 2, 0], pump: 'Punch', echoRate: '1/16',
+    fx: { lattice: .45, latScale: 11, latWarp: 0.6, echo: .55, breath: .3 },
+    look: { punch: .7, glitch: .3, warp: .3, trails: .35, spin: .3, zoom: 1, seg: 8 },
+    tex: { grain: .22, glow: .55, color: .7 },
+    desc: 'Crisp geometry laid over everything, electric color that keeps shifting, and stuttering tracers behind every move.'
+  },
+  Psilocybin: {
+    pal: ['#0b0a06', '#3f6b2a', '#d9a441', '#9fe3d1'], mix: .7,
+    modes: [3, 0, 1, 6], pump: 'Breathe', echoRate: '1/8', soft: true,
+    fx: { lattice: .18, latScale: 7, latWarp: 0.45, echo: .2, breath: .85 },
+    look: { punch: .4, glitch: .1, warp: .55, trails: .7, spin: .08, zoom: .95, seg: 6 },
+    tex: { grain: .3, glow: .4, color: .35 },
+    desc: 'Surfaces breathe and melt, earthy colors glow from inside, soft organic patterns come and go.'
+  },
+  DMT: {
+    pal: ['#05020f', '#7a1cff', '#00e0c6', '#ffcf3f'], mix: .9,
+    modes: [5, 6, 1, 2], pump: 'Punch', echoRate: '1/16',
+    fx: { lattice: .65, latScale: 16, latWarp: 1, echo: .35, breath: .4 },
+    look: { punch: .85, glitch: .45, warp: .2, trails: .4, spin: .4, zoom: 1.05, seg: 12 },
+    tex: { grain: .2, glow: .7, color: .85 },
+    desc: 'Hyperspace: dense jewel-colored geometry, fractal tunnels and color that never sits still.'
+  },
+  Mescaline: {
+    pal: ['#120604', '#b8321a', '#f2b134', '#6ad0e8'], mix: .85,
+    modes: [1, 2, 6, 0], pump: 'Breathe', echoRate: '1/8', soft: true,
+    fx: { lattice: .55, latScale: 8, latWarp: 0.25, echo: .25, breath: .45 },
+    look: { punch: .45, glitch: .15, warp: .2, trails: .5, spin: .12, zoom: 1, seg: 6 },
+    tex: { grain: .28, glow: .45, color: .4 },
+    desc: 'The original form constants: bold lattices, tunnels and spirals in saturated desert colors, slow and steady.'
+  },
+  Ayahuasca: {
+    pal: ['#020805', '#0f5c3a', '#c9a227', '#e84d8a'], mix: .85,
+    modes: [6, 3, 1, 5], pump: 'Breathe', echoRate: '1/8', soft: true,
+    fx: { lattice: .3, latScale: 9, latWarp: 0.8, echo: .3, breath: .7 },
+    look: { punch: .45, glitch: .1, warp: .45, trails: .65, spin: .2, zoom: 1, seg: 5 },
+    tex: { grain: .3, glow: .5, color: .45 },
+    desc: 'Deep jungle colors, serpent-like spirals and slow liquid waves.'
+  },
+  Ketamine: {
+    pal: ['#030407', '#2b3446', '#8fa3b8', '#e8f0f7'], mix: .9,
+    modes: [2, 6, 0, 3], pump: 'Duck', echoRate: '1/4',
+    fx: { lattice: .05, latScale: 6, latWarp: 1, echo: .6, breath: .25 },
+    look: { punch: .5, glitch: .7, warp: .3, trails: .85, spin: .05, zoom: 1, seg: 4 },
+    tex: { grain: .45, glow: .2, color: .12 },
+    ranges: { trails: [.7, .9], glitch: [.5, .85], spin: [-.15, .15] },
+    desc: 'Cold and detached: a long tunnel, the picture splitting into slices, heavy slow trails.'
+  }
+};
+// Each trip also exists as a hidden direction so its palette and modes flow through the same code.
+for (const [name, t] of Object.entries(TRIPS)) {
+  DIRS[name] = { pal: t.pal, mix: t.mix, modes: t.modes, grain: t.tex.grain, glow: t.tex.glow, color: t.tex.color, soft: t.soft, hidden: true };
+}
+export const TRIP_NAMES = ['None', ...Object.keys(TRIPS)];
+// Tracer refresh interval, in beats.
+export const ECHO_RATES = { '1/16': .25, '1/8': .5, '1/4': 1 };
+
 const pct = v => Math.round(v * 100) + '%';
 const x2 = v => v.toFixed(2);
 
@@ -60,16 +123,26 @@ export const FOIL = [
   { k: 'bump',    label: 'Scratches', min: 0,  max: 1, step: .01, fmt: x2 }
 ];
 
+// The trip layer. Trips set these; the user can fine-tune them. Auto only varies the density.
+export const TRIPFX = [
+  { k: 'lattice',  label: 'Geometry',  min: 0, max: 1,  step: .01, fmt: pct },
+  { k: 'latScale', label: 'Density',   min: 4, max: 24, step: .1,  fmt: v => v.toFixed(1) },
+  { k: 'latWarp',  label: 'Funnel',    min: 0, max: 1,  step: .01, fmt: pct },
+  { k: 'echo',     label: 'Tracers',   min: 0, max: 1,  step: .01, fmt: pct },
+  { k: 'breath',   label: 'Breathing', min: 0, max: 1,  step: .01, fmt: pct }
+];
+
 // Every continuous parameter. V (live values) eases toward P (control values) for these keys.
 export const KEYS = ['beat', 'pump', 'flow', 'punch', 'glitch', 'warp', 'trails', 'spin', 'zoom',
-  'palMix', 'color', 'grain', 'glow', 'holo', 'bands', 'sparkle', 'bump'];
+  'palMix', 'color', 'grain', 'glow', 'holo', 'bands', 'sparkle', 'bump', 'lattice', 'latScale', 'latWarp', 'echo', 'breath'];
 
 export const DEFAULTS = {
   mode: 1, seg: 8,
   beat: .8, pump: .7, flow: 1,
   punch: .7, glitch: .35, warp: .25, trails: .45, spin: .22, zoom: .95,
   palMix: .75, color: .35, grain: .28, glow: .35,
-  holo: .84, bands: 1.1, sparkle: .73, bump: .6
+  holo: .84, bands: 1.1, sparkle: .73, bump: .6,
+  lattice: 0, latScale: 10, latWarp: .5, echo: 0, breath: 0
 };
 
 export const FORMATS = { '9:16': [9, 16], '1:1': [1, 1], '4:5': [4, 5] };

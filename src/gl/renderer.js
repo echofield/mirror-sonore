@@ -1,8 +1,8 @@
 // WebGL1 renderer: two programs, ping-pong feedback targets, mipmapped image texture.
-import { VS, mainFS, postFS } from './shaders.js';
+import { VS, mainFS, postFS, copyFS } from './shaders.js';
 import { G, P, V, S, U } from '../state.js';
 
-let gl, MAIN, POST, imgTex, aniso, fbType, targets = [], last = 0, rw = 0, rh = 0;
+let gl, MAIN, POST, COPY, imgTex, aniso, fbType, targets = [], echo = null, last = 0, rw = 0, rh = 0;
 let onThumb = null;
 
 export function initRenderer(canvas, thumbCb) {
@@ -11,7 +11,7 @@ export function initRenderer(canvas, thumbCb) {
   if (!gl) return 'This browser could not start WebGL, which the visuals need. Try Chrome, Safari or Firefox on a recent device.';
   const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
   const prec = (hp && hp.precision > 0) ? 'precision highp float;\n' : 'precision mediump float;\n';
-  try { MAIN = program(mainFS(prec)); POST = program(postFS(prec)); }
+  try { MAIN = program(mainFS(prec)); POST = program(postFS(prec)); COPY = program(copyFS(prec)); }
   catch (e) { console.error(e); return 'The visual engine failed to start on this device.'; }
 
   const vbo = gl.createBuffer();
@@ -81,8 +81,9 @@ export function setRenderSize(canvas, w, h) {
   if (w === rw && h === rh && targets.length) return;
   rw = w; rh = h;
   canvas.width = w; canvas.height = h;
-  targets.forEach(x => { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.f); });
+  targets.concat(echo ? [echo] : []).forEach(x => { gl.deleteTexture(x.t); gl.deleteFramebuffer(x.f); });
   targets = [makeTarget(w, h), makeTarget(w, h)];
+  echo = makeTarget(w, h);   // tracer frame
   last = 0;
 }
 
@@ -112,6 +113,8 @@ export function render(now) {
   gl.useProgram(MAIN.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, imgTex); ui1(MAIN, 'uImg', 0);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src.t); ui1(MAIN, 'uPrev', 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, echo.t); ui1(MAIN, 'uEchoTex', 2);
+  u1(MAIN, 'uLattice', U.lattice); u1(MAIN, 'uLatScale', U.latScale); u1(MAIN, 'uLatWarp', V.latWarp); u1(MAIN, 'uEcho', U.echo); u1(MAIN, 'uBreath', U.breath);
   u2(MAIN, 'uRes', rw, rh); u2(MAIN, 'uDrift', U.dx, U.dy); u2(MAIN, 'uTilt', U.tx, U.ty); u2(MAIN, 'uJulia', U.jx, U.jy);
   u3(MAIN, 'uP0', G.pal[0]); u3(MAIN, 'uP1', G.pal[1]); u3(MAIN, 'uP2', G.pal[2]); u3(MAIN, 'uP3', G.pal[3]); u3(MAIN, 'uBg', G.bg);
   u3(MAIN, 'uPoke', S.poke);
@@ -123,6 +126,14 @@ export function render(now) {
   u1(MAIN, 'uSlice', U.slice); u1(MAIN, 'uSliceSeed', S.sliceSeed); u1(MAIN, 'uHolo', U.holo); u1(MAIN, 'uBands', V.bands);
   u1(MAIN, 'uSparkle', U.sparkle); u1(MAIN, 'uBump', V.bump); u1(MAIN, 'uPokeAmp', U.pokeAmp);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if (U.capture) {                       // stepped tracers: hold this frame until the next capture
+    gl.bindFramebuffer(gl.FRAMEBUFFER, echo.f);
+    gl.useProgram(COPY.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, dst.t); ui1(COPY, 'uTex', 0);
+    u2(COPY, 'uRes', rw, rh);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, rw, rh);

@@ -1,7 +1,7 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
-import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS } from './config.js';
+import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
 import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP } from './state.js';
-import { setDirection, setMode, shuffle, setAuto } from './auto.js';
+import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
 
 export const el = {};
 const $ = id => document.getElementById(id);
@@ -14,15 +14,22 @@ export function initUI(handlers) {
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'recMini', 'recMiniLbl',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
+   'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
    'fmts', 'quals', 'lens', 'clips', 'safeT', 'safeWrap', 'recBtn', 'recLbl', 'recNote', 'results', 'spec', 'drop', 'toast'
   ].forEach(id => { el[id] = $(id); });
 
   // directions: full chips in the rack, compact chips in the full-screen overlay
-  Object.keys(DIRS).forEach(name => {
+  Object.keys(DIRS).filter(n => !DIRS[n].hidden).forEach(name => {
     chip(el.dirs, name, true, () => setDirection(name));
     chip(el.miniDirs, name, true, () => setDirection(name));
   });
+  TRIP_NAMES.forEach(name => {
+    tripChip(el.trips, name, 'chip');
+    tripChip(el.miniTrips, name, '');
+  });
+  Object.keys(ECHO_RATES).forEach(r => addBtn(el.echoRate, r, r, () => { G.echoRate = r; syncTrip(); }));
+  el.journeyT.addEventListener('click', () => { G.journey = !G.journey; syncTrip(); });
   BARS.forEach(n => addBtn(el.bars, n, n + ' bars', () => { AUTO.bars = n; setAuto(true); }));
   TRANSITIONS.forEach(t => addBtn(el.trans, t, t, () => { AUTO.trans = t; pressed(el.trans, t); }));
   PUMP_STYLES.forEach(s => {
@@ -39,6 +46,7 @@ export function initUI(handlers) {
   buildFaders(el.feel, FEEL, 'look');
   buildFaders(el.tex, TEX, null);
   buildFaders(el.foil, FOIL, null);
+  buildFaders(el.tripfx, TRIPFX, null);
   el.segIn.addEventListener('input', () => {
     P.seg = parseInt(el.segIn.value, 10); el.segOut.textContent = P.seg; setFill(el.segIn);
     if (AUTO.on) setAuto(false);
@@ -97,6 +105,13 @@ function chip(group, name, swatch, fn) {
   f.appendChild(document.createTextNode(name));
   return addBtn(group, name, f, fn, group === el.dirs ? 'chip' : '');
 }
+function tripChip(group, name, cls) {
+  const f = document.createDocumentFragment(), sw = document.createElement('span'), T = TRIPS[name];
+  sw.className = 'sw';
+  sw.style.background = T ? `conic-gradient(${T.pal[1]},${T.pal[2]},${T.pal[3]},${T.pal[1]})` : 'var(--line)';
+  f.appendChild(sw); f.appendChild(document.createTextNode(name));
+  return addBtn(group, name, f, () => setTrip(name), cls);
+}
 export function updatePictureSwatch() {
   if (!G.picturePal) return;
   document.querySelectorAll('.sw[data-dir="Picture"]').forEach(s => { s.style.background = G.picturePal.css; });
@@ -134,8 +149,9 @@ export function syncUI() {
   el.foilWrap.hidden = P.mode !== HOLO;
   el.segIn.value = P.seg; el.segOut.textContent = P.seg; setFill(el.segIn);
   Object.keys(faders).forEach(k => faders[k].forEach(f => { f.input.value = P[k]; f.out.textContent = f.d.fmt(P[k]); setFill(f.input); }));
-  el.lookBadge.textContent = G.dir + ' · ' + MODES[P.mode] + (AUTO.on ? ' · Auto' : '');
+  el.lookBadge.textContent = (G.trip && G.dir !== G.trip ? G.trip + ' · ' : '') + G.dir + ' · ' + MODES[P.mode] + (AUTO.on ? ' · Auto' : '');
   syncPump();
+  syncTrip();
 }
 
 const PUMP_NOTES = {
@@ -144,6 +160,12 @@ const PUMP_NOTES = {
   Punch: 'On each kick the picture zooms in and flashes, then relaxes.',
   Breathe: 'The picture follows the bass smoothly, without a hard hit on the kick.'
 };
+function syncTrip() {
+  pressed(el.trips, G.trip || 'None'); pressed(el.miniTrips, G.trip || 'None');
+  pressed(el.echoRate, G.echoRate);
+  el.journeyT.setAttribute('aria-pressed', String(G.journey));
+  el.tripDesc.textContent = G.trip ? TRIPS[G.trip].desc : 'No trip: the trip layer is off. Pick one to add its geometry, tracers, breathing and color.';
+}
 export function setPump(style, len) {
   PUMP.style = style; PUMP.len = len;
   syncPump();
@@ -316,6 +338,7 @@ function initKeys() {
     else if (k === 'r' || k === 'R') { if (!el.recBtn.disabled) H.toggleRecord(); }
     else if (k === 's' || k === 'S') shuffle();
     else if (k === 'a' || k === 'A') setAuto(!AUTO.on);
+    else if (k === 't' || k === 'T') setTrip(TRIP_NAMES[(TRIP_NAMES.indexOf(G.trip || 'None') + 1) % TRIP_NAMES.length]);
     else if (k === 'p' || k === 'P') setPump(PUMP_STYLES[(PUMP_STYLES.indexOf(PUMP.style) + 1) % PUMP_STYLES.length], PUMP.len);
     else if (k === 'f' || k === 'F') setImmersive(!document.body.classList.contains('immersive'));
     else if (k === 'Escape' && document.body.classList.contains('immersive')) setImmersive(false);

@@ -97,8 +97,9 @@ function endSession() {
 
 // Called every frame: progress display and the stop at the chosen length.
 export function recordTick(now) {
-  if (!clipActive || !recT0) return;
+  if (!clipActive || !recT0) { G.recT = -1; return; }
   const e = (now - recT0) / 1000;
+  G.recT = e; G.recLen = recLen;   // the Journey arc follows the clip
   el.recTime.textContent = 'REC ' + fmt(e) + ' / ' + fmt(recLen) + (SESSION.total > 1 ? ' · ' + (SESSION.done + 1) + '/' + SESSION.total : '');
   el.recFill.style.transform = 'scaleX(' + Math.min(1, e / recLen).toFixed(4) + ')';
   if (e >= recLen) stopClip();

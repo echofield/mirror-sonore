@@ -13,6 +13,7 @@ uniform vec2 uRes; uniform vec2 uDrift; uniform vec2 uTilt; uniform vec2 uJulia;
 uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform vec3 uBg; uniform vec3 uPoke;
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
 uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp;
+uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
@@ -41,6 +42,13 @@ float hf(vec2 v, float amp, float t){
   float d = length(v - uPoke.xy);
   float front = 1.0 - smoothstep(uPoke.z*0.6 - 0.02, uPoke.z*0.6 + 0.1, d);
   return h + uPokeAmp*0.09*sin(d*24.0 - uPoke.z*13.0)*exp(-uPoke.z*1.6)*front; }
+// Hexagonal lattice (Klüver's honeycomb form constant): local coords in xy, cell id in zw.
+const vec2 HS = vec2(1.0, 1.7320508);
+float hexDist(vec2 p){ p = abs(p); return max(dot(p, HS*0.5), p.x); }
+vec4 hexCell(vec2 p){
+  vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0))/HS.xyxy) + 0.5;
+  vec4 h = vec4(p - hc.xy*HS, p - (hc.zw + 0.5)*HS);
+  return dot(h.xy, h.xy) < dot(h.zw, h.zw) ? vec4(h.xy, hc.xy) : vec4(h.zw, hc.zw + 0.5); }
 
 void main(){
   vec2 fc = gl_FragCoord.xy;
@@ -50,6 +58,8 @@ void main(){
   vec2 p0 = (fc - 0.5*uRes)/uRes.y;
   p0.x += sl*0.35;
   vec2 p = p0/uZoom;
+  // breathing: slow radial swelling plus an organic bulge, independent of the beat
+  p *= 1.0 + uBreath*(0.05*sin(length(p)*7.0 - uT*1.3) + 0.06*(fbm(p*1.3 + uT*0.08) - 0.5));
   if(uMode < 0.5) p.x = abs(p.x);          // Mirror: fold first so the symmetry stays on screen
   p = rot(uRot)*p;
   vec3 col; float fog = 1.0;
@@ -153,6 +163,27 @@ void main(){
   col = mix(vec3(l), col, uSat);
   col = (col - 0.5)*uContrast + 0.5;
   col = clamp(col*uBright*fog, 0.0, 1.0);
+  // trip layer 1 — geometry (Klüver's form constants). A honeycomb either flat on the view, or mapped
+  // through the eye-to-cortex log-polar transform (uLatWarp → 1), which turns it into a funnel-shaped web
+  // that flows toward the centre — the way Bressloff & Cowan's model explains tunnels and cobwebs.
+  if(uLattice > 0.001){
+    vec2 wob = (vec2(fbm(p0*3.0 + uT*0.1), fbm(p0*3.0 - uT*0.1 + 4.0)) - 0.5)*(0.6 + uWarp*2.0);
+    vec4 hf1 = hexCell(rot(uRot*0.3)*p0*uLatScale + wob);
+    float r0 = max(length(p0), 0.001);
+    float nAround = floor(uLatScale*0.6 + 0.5);
+    vec2 lpp = vec2(atan(p0.y, p0.x), log(r0) - uTunZ*0.25)*nAround/6.2831853;
+    vec4 hf2 = hexCell(lpp + wob*0.15);
+    float l1 = 1.0 - smoothstep(0.0, 0.07, 0.5 - hexDist(hf1.xy));
+    float l2 = (1.0 - smoothstep(0.0, 0.07, 0.5 - hexDist(hf2.xy)))*smoothstep(0.02, 0.12, r0);
+    float line = mix(l1, l2, uLatWarp);
+    float cid = h21(mix(hf1.zw, hf2.zw, step(0.5, uLatWarp)));
+    line *= 0.65 + 0.35*sin(uT*1.7 + cid*6.2831853);       // lines shimmer cell by cell
+    vec3 lc = mix(pal(cid*0.5 + uPalPhase + 0.25), vec3(1.0), 0.2);
+    col *= mix(1.0, 0.8 + 0.4*cid, uLattice*0.6);           // each cell slightly different: texture repetition
+    col = min(col + lc*line*uLattice*1.1, 1.2);
+  }
+  // trip layer 2 — tracers: a held copy of an earlier frame, refreshed in steps on the beat grid
+  if(uEcho > 0.001) col = mix(col, texture2D(uEchoTex, fc/uRes).rgb, uEcho*0.45);
   // feedback: previous frame, slightly zoomed and rotated, mixed in as trails
   vec2 s = fc/uRes - 0.5;
   float ar = uRes.x/uRes.y;
@@ -195,4 +226,10 @@ void main(){
   c += (gm*0.75 + gc*0.35)*amt;
   gl_FragColor = vec4(c, 1.0);
 }
+`;
+
+// Copies a texture: used to capture the tracer frame.
+export const copyFS = prec => prec + `
+uniform sampler2D uTex; uniform vec2 uRes;
+void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
 `;

@@ -5,7 +5,7 @@
 //   V.flow — continuous motion driven by the music
 // Pump is the only place the kick or bass moves zoom and brightness, so Pump Off means no pumping.
 import { A, S, V, P, U, G, BEAT, PUMP } from './state.js';
-import { KEYS, HOLO, PUMP_LENGTHS } from './config.js';
+import { KEYS, HOLO, PUMP_LENGTHS, ECHO_RATES } from './config.js';
 
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -15,6 +15,7 @@ export function reactKick() {
   S.rotV += dir * V.punch * V.beat * .9 * (Math.abs(V.spin) + .15);
   S.poke = [rnd(-.25, .25), rnd(-.35, .35), 0];
   S.pumpT = 0;
+  S.echoT = 99;      // tracers re-capture on the kick, so they stutter on the beat grid
 }
 
 // Pump envelope and its effect on zoom / brightness / contrast (multipliers and offsets).
@@ -31,6 +32,15 @@ function pumpShape(dt, F) {
     default:        return { z: 0, b: 0, c: 0 };
   }
 }
+// Journey: with a trip on, its intensity builds over the first quarter of a clip, peaks, and eases at the end.
+// While previewing it swells and settles in a slow 32 s wave instead.
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+function journeyArc() {
+  if (!G.trip || !G.journey) return 1;
+  if (G.recT >= 0 && G.recLen > 0) { const x = clamp(G.recT / G.recLen); return .5 + .5 * smooth(0, .25, x) * (1 - .3 * smooth(.8, 1, x)); }
+  return .55 + .45 * (.5 - .5 * Math.cos(2 * Math.PI * G.clock / 32));
+}
+
 export function reactSnare() {
   S.sliceSeed = Math.random() * 100;
   if (G.dir === 'Original') S.hueKick += (Math.random() < .5 ? -1 : 1) * V.color * .25 * V.beat;
@@ -86,4 +96,15 @@ export function step(dt) {
   U.jx = jr * Math.cos(S.jul); U.jy = jr * Math.sin(S.jul);
   U.grain = V.grain * (.75 + .7 * ht + .3 * hi);
   U.glow = V.glow * (.6 + .8 * drop) * (1 + Math.max(0, pm.b) * 3);   // glow pulses only with Punch/Breathe pumping
+
+  // trip layer
+  G.arc = journeyArc();
+  if (G.trip) U.warp *= .7 + .3 * G.arc;
+  U.lattice = V.lattice * (.5 + .5 * G.arc) * (1 + .3 * k);
+  U.latScale = V.latScale * (1 + .05 * Math.sin(S.t * .35));
+  U.echo = V.echo * (.55 + .45 * G.arc);
+  U.breath = V.breath * (.55 + .45 * G.arc);
+  S.echoT += dt;
+  U.capture = V.echo > .01 && S.echoT >= Math.max(.05, BEAT.period * ECHO_RATES[G.echoRate]);
+  if (U.capture) S.echoT = 0;
 }

@@ -83,6 +83,8 @@ svg{display:block}
 .macro label{grid-area:lab;font-size:13.5px;font-weight:600}
 .macro output{grid-area:out;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 .macro input{grid-area:rng;margin-top:-4px}
+.tripdesc{margin:0;font-size:14px;line-height:1.5;color:var(--bone);min-height:3em;text-wrap:pretty}
+.autorow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
 .pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
 .quick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .qbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px 6px 10px;font-size:13px;font-weight:600}
@@ -204,13 +206,14 @@ input[type=range]:focus-visible{outline-offset:4px}
   .led{font-size:8px;letter-spacing:.06em;gap:4px}
   .bpm{font-size:9.5px;margin-left:0}
   .meters,.keys{display:none}
-  .tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-inline:-16px;border-top:1px solid var(--line)}
-  .tabs button{border:0;background:transparent;padding:12px 2px 10px;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent}
+  .tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin-inline:-16px;border-top:1px solid var(--line)}
+  .tabs button{border:0;background:transparent;padding:12px 1px 10px;font-family:var(--f-mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);border-bottom:2px solid transparent}
   .tabs button[aria-selected="true"]{color:var(--bone);border-bottom-color:var(--phos)}
   .rack{padding-top:16px}
   .rack .sec{display:none;border-bottom:0;padding-bottom:0}
   .rack .sec > .lab{display:none}
   .rack[data-tab="sources"] .sec[data-tab="sources"],
+  .rack[data-tab="trip"] .sec[data-tab="trip"],
   .rack[data-tab="direction"] .sec[data-tab="direction"],
   .rack[data-tab="look"] .sec[data-tab="look"],
   .rack[data-tab="color"] .sec[data-tab="color"],
@@ -292,6 +295,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Full screen
         </button>
       </div>
+      <div class="mini" id="miniTrips" role="group" aria-label="Trip"></div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
       <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
       <div class="mini" id="miniPump" role="group" aria-label="Pump style"></div>
@@ -312,6 +316,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
 
     <nav class="tabs" id="tabs" aria-label="Controls">
       <button type="button" data-tab="sources">Sources</button>
+      <button type="button" data-tab="trip">Trip</button>
       <button type="button" data-tab="direction">Direction</button>
       <button type="button" data-tab="look">Look</button>
       <button type="button" data-tab="color">Color</button>
@@ -337,6 +342,19 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
         </label>
       </div>
       <p class="note">Or drag files anywhere onto the page. A video file works as a sound source too.</p>
+    </section>
+
+    <section class="sec" data-tab="trip">
+      <h2 class="lab">Trip</h2>
+      <div class="chips" id="trips" role="group" aria-label="Trip"></div>
+      <p class="tripdesc" id="tripDesc"></p>
+      <div class="faders" id="tripfx"></div>
+      <div class="opt"><span>Tracers every</span><div class="seg sm" id="echoRate" role="group" aria-label="Tracer timing in notes"></div></div>
+      <div class="autorow">
+        <button class="switch" id="journeyT" type="button" aria-pressed="true"><i></i>Journey</button>
+        <p class="note">Builds up, peaks, then settles over each clip.</p>
+      </div>
+      <p class="note">Visual styles inspired by how each experience is described in research and trip reports. Pure image and sound, nothing else.</p>
     </section>
 
     <section class="sec" data-tab="direction">
@@ -383,7 +401,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · S shuffle · A auto · P pump style · F full screen · 1–7 modes</p>
+      <p class="keys">Space play · R record · S shuffle · A auto · T trip · P pump style · F full screen · 1–7 modes</p>
     </section>
   </aside>
 </div>
@@ -415,6 +433,83 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     Ember: { pal: ["#030101", "#7a0d02", "#ff4a12", "#ffd27a"], mix: 0.85, modes: [2, 6, 1, 5, 3], grain: 0.35, glow: 0.6, color: 0.4 }
   };
   var DEFAULT_DIR = "Picture";
+  var TRIPS = {
+    LSD: {
+      pal: ["#080414", "#ff2fa8", "#ffd23a", "#2de2ff"],
+      mix: 0.8,
+      modes: [1, 6, 1, 2, 0],
+      pump: "Punch",
+      echoRate: "1/16",
+      fx: { lattice: 0.45, latScale: 11, latWarp: 0.6, echo: 0.55, breath: 0.3 },
+      look: { punch: 0.7, glitch: 0.3, warp: 0.3, trails: 0.35, spin: 0.3, zoom: 1, seg: 8 },
+      tex: { grain: 0.22, glow: 0.55, color: 0.7 },
+      desc: "Crisp geometry laid over everything, electric color that keeps shifting, and stuttering tracers behind every move."
+    },
+    Psilocybin: {
+      pal: ["#0b0a06", "#3f6b2a", "#d9a441", "#9fe3d1"],
+      mix: 0.7,
+      modes: [3, 0, 1, 6],
+      pump: "Breathe",
+      echoRate: "1/8",
+      soft: true,
+      fx: { lattice: 0.18, latScale: 7, latWarp: 0.45, echo: 0.2, breath: 0.85 },
+      look: { punch: 0.4, glitch: 0.1, warp: 0.55, trails: 0.7, spin: 0.08, zoom: 0.95, seg: 6 },
+      tex: { grain: 0.3, glow: 0.4, color: 0.35 },
+      desc: "Surfaces breathe and melt, earthy colors glow from inside, soft organic patterns come and go."
+    },
+    DMT: {
+      pal: ["#05020f", "#7a1cff", "#00e0c6", "#ffcf3f"],
+      mix: 0.9,
+      modes: [5, 6, 1, 2],
+      pump: "Punch",
+      echoRate: "1/16",
+      fx: { lattice: 0.65, latScale: 16, latWarp: 1, echo: 0.35, breath: 0.4 },
+      look: { punch: 0.85, glitch: 0.45, warp: 0.2, trails: 0.4, spin: 0.4, zoom: 1.05, seg: 12 },
+      tex: { grain: 0.2, glow: 0.7, color: 0.85 },
+      desc: "Hyperspace: dense jewel-colored geometry, fractal tunnels and color that never sits still."
+    },
+    Mescaline: {
+      pal: ["#120604", "#b8321a", "#f2b134", "#6ad0e8"],
+      mix: 0.85,
+      modes: [1, 2, 6, 0],
+      pump: "Breathe",
+      echoRate: "1/8",
+      soft: true,
+      fx: { lattice: 0.55, latScale: 8, latWarp: 0.25, echo: 0.25, breath: 0.45 },
+      look: { punch: 0.45, glitch: 0.15, warp: 0.2, trails: 0.5, spin: 0.12, zoom: 1, seg: 6 },
+      tex: { grain: 0.28, glow: 0.45, color: 0.4 },
+      desc: "The original form constants: bold lattices, tunnels and spirals in saturated desert colors, slow and steady."
+    },
+    Ayahuasca: {
+      pal: ["#020805", "#0f5c3a", "#c9a227", "#e84d8a"],
+      mix: 0.85,
+      modes: [6, 3, 1, 5],
+      pump: "Breathe",
+      echoRate: "1/8",
+      soft: true,
+      fx: { lattice: 0.3, latScale: 9, latWarp: 0.8, echo: 0.3, breath: 0.7 },
+      look: { punch: 0.45, glitch: 0.1, warp: 0.45, trails: 0.65, spin: 0.2, zoom: 1, seg: 5 },
+      tex: { grain: 0.3, glow: 0.5, color: 0.45 },
+      desc: "Deep jungle colors, serpent-like spirals and slow liquid waves."
+    },
+    Ketamine: {
+      pal: ["#030407", "#2b3446", "#8fa3b8", "#e8f0f7"],
+      mix: 0.9,
+      modes: [2, 6, 0, 3],
+      pump: "Duck",
+      echoRate: "1/4",
+      fx: { lattice: 0.05, latScale: 6, latWarp: 1, echo: 0.6, breath: 0.25 },
+      look: { punch: 0.5, glitch: 0.7, warp: 0.3, trails: 0.85, spin: 0.05, zoom: 1, seg: 4 },
+      tex: { grain: 0.45, glow: 0.2, color: 0.12 },
+      ranges: { trails: [0.7, 0.9], glitch: [0.5, 0.85], spin: [-0.15, 0.15] },
+      desc: "Cold and detached: a long tunnel, the picture splitting into slices, heavy slow trails."
+    }
+  };
+  for (const [name, t] of Object.entries(TRIPS)) {
+    DIRS[name] = { pal: t.pal, mix: t.mix, modes: t.modes, grain: t.tex.grain, glow: t.tex.glow, color: t.tex.color, soft: t.soft, hidden: true };
+  }
+  var TRIP_NAMES = ["None", ...Object.keys(TRIPS)];
+  var ECHO_RATES = { "1/16": 0.25, "1/8": 0.5, "1/4": 1 };
   var pct = (v) => Math.round(v * 100) + "%";
   var x2 = (v) => v.toFixed(2);
   var MACROS = [
@@ -444,6 +539,13 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     { k: "sparkle", label: "Sparkle", min: 0, max: 1, step: 0.01, fmt: x2 },
     { k: "bump", label: "Scratches", min: 0, max: 1, step: 0.01, fmt: x2 }
   ];
+  var TRIPFX = [
+    { k: "lattice", label: "Geometry", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "latScale", label: "Density", min: 4, max: 24, step: 0.1, fmt: (v) => v.toFixed(1) },
+    { k: "latWarp", label: "Funnel", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "echo", label: "Tracers", min: 0, max: 1, step: 0.01, fmt: pct },
+    { k: "breath", label: "Breathing", min: 0, max: 1, step: 0.01, fmt: pct }
+  ];
   var KEYS = [
     "beat",
     "pump",
@@ -461,7 +563,12 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     "holo",
     "bands",
     "sparkle",
-    "bump"
+    "bump",
+    "lattice",
+    "latScale",
+    "latWarp",
+    "echo",
+    "breath"
   ];
   var DEFAULTS = {
     mode: 1,
@@ -482,7 +589,12 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     holo: 0.84,
     bands: 1.1,
     sparkle: 0.73,
-    bump: 0.6
+    bump: 0.6,
+    lattice: 0,
+    latScale: 10,
+    latWarp: 0.5,
+    echo: 0,
+    breath: 0
   };
   var FORMATS = { "9:16": [9, 16], "1:1": [1, 1], "4:5": [4, 5] };
   var QUALS = { "720p": 720, "1080p": 1080 };
@@ -513,8 +625,10 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     // holo ripple: x, y, age in seconds
     morph: 0,
     // 1 right after a Morph transition, decays to 0
-    pumpT: 9
+    pumpT: 9,
     // seconds since the last kick, for the pump envelope
+    echoT: 0
+    // seconds since the last tracer capture
   };
   var PUMP = { style: "Punch", len: "1/8" };
   var A = {
@@ -554,7 +668,20 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     // output size (what gets recorded)
     scale: 1,
     // preview render scale (adaptive; forced to 1 while recording)
-    imgAspect: 1
+    imgAspect: 1,
+    trip: null,
+    // active trip name, or null
+    echoRate: "1/16",
+    // tracer refresh, in notes (see ECHO_RATES)
+    journey: true,
+    // Journey arc: trip intensity builds, peaks and settles over each clip
+    arcT: 0,
+    // seconds of playback for the Journey wave when not recording
+    arc: 1,
+    // current Journey intensity (0.5–1)
+    recT: -1,
+    recLen: 0
+    // position inside the clip being recorded (-1 when not recording)
   };
 
   // src/gl/shaders.js
@@ -565,6 +692,7 @@ uniform vec2 uRes; uniform vec2 uDrift; uniform vec2 uTilt; uniform vec2 uJulia;
 uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform vec3 uBg; uniform vec3 uPoke;
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
 uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp;
+uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
@@ -593,6 +721,13 @@ float hf(vec2 v, float amp, float t){
   float d = length(v - uPoke.xy);
   float front = 1.0 - smoothstep(uPoke.z*0.6 - 0.02, uPoke.z*0.6 + 0.1, d);
   return h + uPokeAmp*0.09*sin(d*24.0 - uPoke.z*13.0)*exp(-uPoke.z*1.6)*front; }
+// Hexagonal lattice (Kl\xFCver's honeycomb form constant): local coords in xy, cell id in zw.
+const vec2 HS = vec2(1.0, 1.7320508);
+float hexDist(vec2 p){ p = abs(p); return max(dot(p, HS*0.5), p.x); }
+vec4 hexCell(vec2 p){
+  vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0))/HS.xyxy) + 0.5;
+  vec4 h = vec4(p - hc.xy*HS, p - (hc.zw + 0.5)*HS);
+  return dot(h.xy, h.xy) < dot(h.zw, h.zw) ? vec4(h.xy, hc.xy) : vec4(h.zw, hc.zw + 0.5); }
 
 void main(){
   vec2 fc = gl_FragCoord.xy;
@@ -602,6 +737,8 @@ void main(){
   vec2 p0 = (fc - 0.5*uRes)/uRes.y;
   p0.x += sl*0.35;
   vec2 p = p0/uZoom;
+  // breathing: slow radial swelling plus an organic bulge, independent of the beat
+  p *= 1.0 + uBreath*(0.05*sin(length(p)*7.0 - uT*1.3) + 0.06*(fbm(p*1.3 + uT*0.08) - 0.5));
   if(uMode < 0.5) p.x = abs(p.x);          // Mirror: fold first so the symmetry stays on screen
   p = rot(uRot)*p;
   vec3 col; float fog = 1.0;
@@ -705,6 +842,27 @@ void main(){
   col = mix(vec3(l), col, uSat);
   col = (col - 0.5)*uContrast + 0.5;
   col = clamp(col*uBright*fog, 0.0, 1.0);
+  // trip layer 1 \u2014 geometry (Kl\xFCver's form constants). A honeycomb either flat on the view, or mapped
+  // through the eye-to-cortex log-polar transform (uLatWarp \u2192 1), which turns it into a funnel-shaped web
+  // that flows toward the centre \u2014 the way Bressloff & Cowan's model explains tunnels and cobwebs.
+  if(uLattice > 0.001){
+    vec2 wob = (vec2(fbm(p0*3.0 + uT*0.1), fbm(p0*3.0 - uT*0.1 + 4.0)) - 0.5)*(0.6 + uWarp*2.0);
+    vec4 hf1 = hexCell(rot(uRot*0.3)*p0*uLatScale + wob);
+    float r0 = max(length(p0), 0.001);
+    float nAround = floor(uLatScale*0.6 + 0.5);
+    vec2 lpp = vec2(atan(p0.y, p0.x), log(r0) - uTunZ*0.25)*nAround/6.2831853;
+    vec4 hf2 = hexCell(lpp + wob*0.15);
+    float l1 = 1.0 - smoothstep(0.0, 0.07, 0.5 - hexDist(hf1.xy));
+    float l2 = (1.0 - smoothstep(0.0, 0.07, 0.5 - hexDist(hf2.xy)))*smoothstep(0.02, 0.12, r0);
+    float line = mix(l1, l2, uLatWarp);
+    float cid = h21(mix(hf1.zw, hf2.zw, step(0.5, uLatWarp)));
+    line *= 0.65 + 0.35*sin(uT*1.7 + cid*6.2831853);       // lines shimmer cell by cell
+    vec3 lc = mix(pal(cid*0.5 + uPalPhase + 0.25), vec3(1.0), 0.2);
+    col *= mix(1.0, 0.8 + 0.4*cid, uLattice*0.6);           // each cell slightly different: texture repetition
+    col = min(col + lc*line*uLattice*1.1, 1.2);
+  }
+  // trip layer 2 \u2014 tracers: a held copy of an earlier frame, refreshed in steps on the beat grid
+  if(uEcho > 0.001) col = mix(col, texture2D(uEchoTex, fc/uRes).rgb, uEcho*0.45);
   // feedback: previous frame, slightly zoomed and rotated, mixed in as trails
   vec2 s = fc/uRes - 0.5;
   float ar = uRes.x/uRes.y;
@@ -747,15 +905,21 @@ void main(){
   gl_FragColor = vec4(c, 1.0);
 }
 `;
+  var copyFS = (prec) => prec + `
+uniform sampler2D uTex; uniform vec2 uRes;
+void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
+`;
 
   // src/gl/renderer.js
   var gl;
   var MAIN;
   var POST;
+  var COPY;
   var imgTex;
   var aniso;
   var fbType;
   var targets = [];
+  var echo = null;
   var last = 0;
   var rw = 0;
   var rh = 0;
@@ -769,6 +933,7 @@ void main(){
     try {
       MAIN = program(mainFS(prec));
       POST = program(postFS(prec));
+      COPY = program(copyFS(prec));
     } catch (e) {
       console.error(e);
       return "The visual engine failed to start on this device.";
@@ -859,11 +1024,12 @@ void main(){
     rh = h;
     canvas3.width = w;
     canvas3.height = h;
-    targets.forEach((x) => {
+    targets.concat(echo ? [echo] : []).forEach((x) => {
       gl.deleteTexture(x.t);
       gl.deleteFramebuffer(x.f);
     });
     targets = [makeTarget(w, h), makeTarget(w, h)];
+    echo = makeTarget(w, h);
     last = 0;
   }
   function uploadImage(src, w, h) {
@@ -895,6 +1061,14 @@ void main(){
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, src.t);
     ui1(MAIN, "uPrev", 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, echo.t);
+    ui1(MAIN, "uEchoTex", 2);
+    u1(MAIN, "uLattice", U.lattice);
+    u1(MAIN, "uLatScale", U.latScale);
+    u1(MAIN, "uLatWarp", V.latWarp);
+    u1(MAIN, "uEcho", U.echo);
+    u1(MAIN, "uBreath", U.breath);
     u2(MAIN, "uRes", rw, rh);
     u2(MAIN, "uDrift", U.dx, U.dy);
     u2(MAIN, "uTilt", U.tx, U.ty);
@@ -932,6 +1106,15 @@ void main(){
     u1(MAIN, "uBump", V.bump);
     u1(MAIN, "uPokeAmp", U.pokeAmp);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (U.capture) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, echo.f);
+      gl.useProgram(COPY.p);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, dst.t);
+      ui1(COPY, "uTex", 0);
+      u2(COPY, "uRes", rw, rh);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, rw, rh);
     gl.useProgram(POST.p);
@@ -1390,6 +1573,7 @@ void main(){
     S.rotV += dir * V.punch * V.beat * 0.9 * (Math.abs(V.spin) + 0.15);
     S.poke = [rnd(-0.25, 0.25), rnd(-0.35, 0.35), 0];
     S.pumpT = 0;
+    S.echoT = 99;
   }
   function pumpShape(dt, F) {
     S.pumpT += dt;
@@ -1407,6 +1591,18 @@ void main(){
       default:
         return { z: 0, b: 0, c: 0 };
     }
+  }
+  var smooth = (a, b, x) => {
+    const t = clamp2((x - a) / (b - a));
+    return t * t * (3 - 2 * t);
+  };
+  function journeyArc() {
+    if (!G.trip || !G.journey) return 1;
+    if (G.recT >= 0 && G.recLen > 0) {
+      const x = clamp2(G.recT / G.recLen);
+      return 0.5 + 0.5 * smooth(0, 0.25, x) * (1 - 0.3 * smooth(0.8, 1, x));
+    }
+    return 0.55 + 0.45 * (0.5 - 0.5 * Math.cos(2 * Math.PI * G.clock / 32));
   }
   function reactSnare() {
     S.sliceSeed = Math.random() * 100;
@@ -1461,6 +1657,15 @@ void main(){
     U.jy = jr * Math.sin(S.jul);
     U.grain = V.grain * (0.75 + 0.7 * ht + 0.3 * hi);
     U.glow = V.glow * (0.6 + 0.8 * drop) * (1 + Math.max(0, pm.b) * 3);
+    G.arc = journeyArc();
+    if (G.trip) U.warp *= 0.7 + 0.3 * G.arc;
+    U.lattice = V.lattice * (0.5 + 0.5 * G.arc) * (1 + 0.3 * k);
+    U.latScale = V.latScale * (1 + 0.05 * Math.sin(S.t * 0.35));
+    U.echo = V.echo * (0.55 + 0.45 * G.arc);
+    U.breath = V.breath * (0.55 + 0.45 * G.arc);
+    S.echoT += dt;
+    U.capture = V.echo > 0.01 && S.echoT >= Math.max(0.05, BEAT.period * ECHO_RATES[G.echoRate]);
+    if (U.capture) S.echoT = 0;
   }
 
   // src/ui.js
@@ -1512,6 +1717,12 @@ void main(){
       "sndName",
       "imgIn",
       "sndIn",
+      "trips",
+      "tripDesc",
+      "tripfx",
+      "echoRate",
+      "journeyT",
+      "miniTrips",
       "dirs",
       "bars",
       "trans",
@@ -1544,9 +1755,21 @@ void main(){
     ].forEach((id) => {
       el[id] = $(id);
     });
-    Object.keys(DIRS).forEach((name) => {
+    Object.keys(DIRS).filter((n) => !DIRS[n].hidden).forEach((name) => {
       chip(el.dirs, name, true, () => setDirection(name));
       chip(el.miniDirs, name, true, () => setDirection(name));
+    });
+    TRIP_NAMES.forEach((name) => {
+      tripChip(el.trips, name, "chip");
+      tripChip(el.miniTrips, name, "");
+    });
+    Object.keys(ECHO_RATES).forEach((r) => addBtn(el.echoRate, r, r, () => {
+      G.echoRate = r;
+      syncTrip();
+    }));
+    el.journeyT.addEventListener("click", () => {
+      G.journey = !G.journey;
+      syncTrip();
     });
     BARS.forEach((n) => addBtn(el.bars, n, n + " bars", () => {
       AUTO.bars = n;
@@ -1569,6 +1792,7 @@ void main(){
     buildFaders(el.feel, FEEL, "look");
     buildFaders(el.tex, TEX, null);
     buildFaders(el.foil, FOIL, null);
+    buildFaders(el.tripfx, TRIPFX, null);
     el.segIn.addEventListener("input", () => {
       P.seg = parseInt(el.segIn.value, 10);
       el.segOut.textContent = P.seg;
@@ -1664,6 +1888,14 @@ void main(){
     f.appendChild(document.createTextNode(name));
     return addBtn(group, name, f, fn, group === el.dirs ? "chip" : "");
   }
+  function tripChip(group, name, cls) {
+    const f = document.createDocumentFragment(), sw = document.createElement("span"), T = TRIPS[name];
+    sw.className = "sw";
+    sw.style.background = T ? `conic-gradient(${T.pal[1]},${T.pal[2]},${T.pal[3]},${T.pal[1]})` : "var(--line)";
+    f.appendChild(sw);
+    f.appendChild(document.createTextNode(name));
+    return addBtn(group, name, f, () => setTrip(name), cls);
+  }
   function updatePictureSwatch() {
     if (!G.picturePal) return;
     document.querySelectorAll('.sw[data-dir="Picture"]').forEach((s) => {
@@ -1713,8 +1945,9 @@ void main(){
       f.out.textContent = f.d.fmt(P[k]);
       setFill(f.input);
     }));
-    el.lookBadge.textContent = G.dir + " \xB7 " + MODES[P.mode] + (AUTO.on ? " \xB7 Auto" : "");
+    el.lookBadge.textContent = (G.trip && G.dir !== G.trip ? G.trip + " \xB7 " : "") + G.dir + " \xB7 " + MODES[P.mode] + (AUTO.on ? " \xB7 Auto" : "");
     syncPump();
+    syncTrip();
   }
   var PUMP_NOTES = {
     Off: "No pumping. The kick and bass no longer move the zoom or brightness; Beat and Flow still work.",
@@ -1722,6 +1955,13 @@ void main(){
     Punch: "On each kick the picture zooms in and flashes, then relaxes.",
     Breathe: "The picture follows the bass smoothly, without a hard hit on the kick."
   };
+  function syncTrip() {
+    pressed(el.trips, G.trip || "None");
+    pressed(el.miniTrips, G.trip || "None");
+    pressed(el.echoRate, G.echoRate);
+    el.journeyT.setAttribute("aria-pressed", String(G.journey));
+    el.tripDesc.textContent = G.trip ? TRIPS[G.trip].desc : "No trip: the trip layer is off. Pick one to add its geometry, tracers, breathing and color.";
+  }
   function setPump(style, len) {
     PUMP.style = style;
     PUMP.len = len;
@@ -1947,6 +2187,7 @@ void main(){
         if (!el.recBtn.disabled) H.toggleRecord();
       } else if (k === "s" || k === "S") shuffle();
       else if (k === "a" || k === "A") setAuto(!AUTO.on);
+      else if (k === "t" || k === "T") setTrip(TRIP_NAMES[(TRIP_NAMES.indexOf(G.trip || "None") + 1) % TRIP_NAMES.length]);
       else if (k === "p" || k === "P") setPump(PUMP_STYLES[(PUMP_STYLES.indexOf(PUMP.style) + 1) % PUMP_STYLES.length], PUMP.len);
       else if (k === "f" || k === "F") setImmersive(!document.body.classList.contains("immersive"));
       else if (k === "Escape" && document.body.classList.contains("immersive")) setImmersive(false);
@@ -1960,8 +2201,9 @@ void main(){
   var clamp4 = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
   var hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   function lookFor(name, o = {}) {
-    const D = DIRS[name], soft = !!D.soft;
-    const modes = D.modes;
+    const D = DIRS[name], T = G.trip ? TRIPS[G.trip] : null;
+    const soft = T ? !!T.soft : !!D.soft;
+    const modes = T ? T.modes : D.modes;
     let mode = o.signature ? modes[0] : pick(modes);
     if (o.change && Math.random() < 0.65 || o.big) {
       const others = modes.filter((m) => m !== P.mode);
@@ -1978,6 +2220,13 @@ void main(){
       spin: sig ? 0.22 : rnd2(-0.6, 0.6) * (soft ? 0.4 : 1),
       zoom: sig ? 0.95 : rnd2(0.8, 1.9)
     };
+    if (T) {
+      if (sig) Object.assign(L, T.look);
+      else if (T.ranges) Object.keys(T.ranges).forEach((k) => {
+        L[k] = rnd2(T.ranges[k][0], T.ranges[k][1]);
+      });
+      L.latScale = sig ? T.fx.latScale : clamp4(T.fx.latScale * rnd2(0.75, 1.3), 4, 24);
+    }
     if (mode === 4) {
       L.trails = Math.min(L.trails, 0.3);
       L.zoom = sig ? 1 : rnd2(0.9, 1.2);
@@ -2031,6 +2280,28 @@ void main(){
     const L = lookFor(name, { signature: true });
     Object.assign(L, { palMix: D.mix, grain: D.grain, glow: D.glow, color: D.color });
     if (name === "Holo") Object.assign(L, { holo: 0.84, bands: 1.1, sparkle: 0.73, bump: 0.6 });
+    S.hueKick = 0;
+    applyLook(L, AUTO.on ? "shuffle" : "user");
+  }
+  function setTrip(name) {
+    const T = TRIPS[name];
+    if (!T) {
+      G.trip = null;
+      Object.assign(P, { lattice: 0, echo: 0, breath: 0 });
+      if (DIRS[G.dir] && DIRS[G.dir].hidden) {
+        setDirection(DEFAULT_DIR);
+        return;
+      }
+      applyLook(lookFor(G.dir, { signature: true }), AUTO.on ? "shuffle" : "user");
+      return;
+    }
+    G.trip = name;
+    G.dir = name;
+    applyPalette();
+    G.echoRate = T.echoRate;
+    PUMP.style = T.pump;
+    const L = lookFor(name, { signature: true });
+    Object.assign(L, { palMix: T.mix }, T.tex, T.fx);
     S.hueKick = 0;
     applyLook(L, AUTO.on ? "shuffle" : "user");
   }
@@ -2266,8 +2537,13 @@ void main(){
     }
   }
   function recordTick(now) {
-    if (!clipActive || !recT0) return;
+    if (!clipActive || !recT0) {
+      G.recT = -1;
+      return;
+    }
     const e = (now - recT0) / 1e3;
+    G.recT = e;
+    G.recLen = recLen;
     el.recTime.textContent = "REC " + fmt2(e) + " / " + fmt2(recLen) + (SESSION.total > 1 ? " \xB7 " + (SESSION.done + 1) + "/" + SESSION.total : "");
     el.recFill.style.transform = "scaleX(" + Math.min(1, e / recLen).toFixed(4) + ")";
     if (e >= recLen) stopClip();
@@ -2464,7 +2740,7 @@ void main(){
     adaptQuality(dt, now, SESSION.active);
     requestAnimationFrame(frame);
   }
-  if (window.__MS_TEST__) window.__ms = { U, V, S, PUMP, BEAT };
+  if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT };
   boot();
 })();
 </script>

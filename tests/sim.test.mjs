@@ -131,6 +131,21 @@ click(Array.prototype.find.call($('pumpLen').children, b => b.dataset.v === '1/8
 beat.value = '0.8'; beat.dispatchEvent(new w.Event('input'));
 
 for (const b of $('dirs').children) { click(b); await run(.2); }
+check(!Array.prototype.some.call($('dirs').children, b => /LSD|DMT/.test(b.textContent)), 'trip palettes are not listed as directions');
+// trips
+const tripBtn = n => Array.prototype.find.call($('trips').children, b => b.dataset.v === n);
+let captures = 0;
+for (const n of ['LSD', 'Psilocybin', 'DMT', 'Mescaline', 'Ayahuasca', 'Ketamine']) {
+  click(tripBtn(n)); await run(1.5, () => { if (w.__ms.U.capture) captures++; });
+  check($('lookBadge').textContent.startsWith(n) && $('tripDesc').textContent.length > 20 && w.__ms.V.lattice > .01,
+    `trip ${n}: ${$('lookBadge').textContent} · pump ${w.__ms.PUMP.style}`);
+}
+check(captures > 10, 'tracers capture on the beat grid: ' + captures + ' captures');
+check(w.__ms.G.arc > .5 && w.__ms.G.arc <= 1, 'Journey arc is active: ' + w.__ms.G.arc.toFixed(2));
+click(Array.prototype.find.call($('dirs').children, b => b.dataset.v === 'Gold')); await run(.3);
+check($('lookBadge').textContent.startsWith('Ketamine · Gold'), 'a direction can recolor a trip: ' + $('lookBadge').textContent);
+click(tripBtn('None')); await run(2);
+check(w.__ms.G.trip === null && w.__ms.V.lattice < .02 && w.__ms.V.echo < .02, 'Trip None turns the trip layer off');
 for (const b of $('modes').children) { click(b); await run(.3); }
 for (const b of $('miniModes').children) { click(b); await run(.1); }
 click($('shuffle')); await run(.5);

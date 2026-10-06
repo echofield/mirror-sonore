@@ -49,7 +49,7 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STAT
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
-const rows = ['Neon', 'Original', 'Gold'];
+const rows = ['Neon', 'Original', 'Gold', 'LSD'];   // LSD row turns the trip layer on
 const out = new PNG({ width: W * MODES.length, height: H * rows.length });
 let failed = 0;
 rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
@@ -68,9 +68,12 @@ rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
     ['uP0', 'uP1', 'uP2', 'uP3'].forEach((n, i) => MAIN.u[n] && gl.uniform3fv(MAIN.u[n], pal[i]));
     if (MAIN.u.uBg) gl.uniform3fv(MAIN.u.uBg, hex('#0b0c12'));
     if (MAIN.u.uPoke) gl.uniform3fv(MAIN.u.uPoke, [.05, .1, .35]);
+    if (MAIN.u.uEchoTex) gl.uniform1i(MAIN.u.uEchoTex, 1);
+    const trip = dir === 'LSD';
     const U = { uAspect: .8, uT: 1 + f * .05, uMode: mode, uSeg: 6, uZoom: 1, uRot: .4, uWarp: mode === 4 ? .5 : .25, uTwist: .3, uTrail: .3,
       uHue: 0, uChroma: 1.2, uBright: 1, uContrast: 1.1, uSat: 1.1, uTunZ: .7, uFb: 1.004, uFbRot: .001,
-      uPalMix: D.mix, uPalPhase: .1, uSlice: 0, uSliceSeed: 12.3, uHolo: .84, uBands: 1.1, uSparkle: .9, uBump: .6, uPokeAmp: .9 };
+      uPalMix: D.mix, uPalPhase: .1, uSlice: 0, uSliceSeed: 12.3, uHolo: .84, uBands: 1.1, uSparkle: .9, uBump: .6, uPokeAmp: .9,
+      uLattice: trip ? .6 : 0, uLatScale: 11, uLatWarp: mode % 2 ? 1 : 0, uEcho: trip ? .3 : 0, uBreath: trip ? .5 : 0 };
     for (const k in U) f1(k, U[k]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(POST.p);
