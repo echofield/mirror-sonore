@@ -15,8 +15,14 @@ export const S = {
   poke: [0, 0, 9],   // holo ripple: x, y, age in seconds
   morph: 0,          // 1 right after a Morph transition, decays to 0
   pumpT: 9,          // seconds since the last kick, for the pump envelope
+  waveT: 0, waveX: 0, waveAcc: 0,  // Wave mode: travel of the passing wave, sideways slide, history scroll remainder
   echoT: 0           // seconds since the last tracer capture
 };
+
+// Wave mode: what the shader reads across the picture's width. hist is the level history
+// (newest on the left); tex is the RGBA row uploaded each frame (r: spectrum in place, g: history).
+export const WAVE_N = 128;
+export const WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N * 4) };
 
 // Pump style and length are the user's, like Beat/Pump/Flow: Auto never changes them.
 export const PUMP = { style: 'Punch', len: '1/8' };
@@ -26,7 +32,8 @@ export const A = {
   low: 0, mid: 0, high: 0, lvl: 0,
   kick: 0, snare: 0, hat: 0, drop: 0, cut: 0,
   eFast: 0, eSlow: 0, lastDrop: -99, playT: 0,
-  pk: [.2, .2, .2, .2]
+  pk: [.2, .2, .2, .2],
+  spec: new Float32Array(48)   // smoothed spectrum, 40 Hz → 12 kHz in log-spaced bands (Wave mode)
 };
 
 export const BEAT = { iois: [], last: -9, period: .5, bpm: 0 };

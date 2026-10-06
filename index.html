@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Miroir Sonore</title>
 <meta name="description" content="Drop an image and a sound. The picture folds, warps and hits with the music. Record vertical clips for TikTok.">
-<meta name="theme-color" content="#0c0d13">
+<meta name="theme-color" content="#F4F4F2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
 <!-- build:css --><link rel="stylesheet" href="src/styles.css"><!-- /build:css -->
 </head>
 <body>
@@ -16,8 +16,8 @@
 <div class="app">
   <header class="head">
     <div>
-      <h1 class="mark">Miroir <span>Sonore</span></h1>
-      <p class="tag">Drop an image and a sound. Pick a direction, let Auto change the look on the beat, and record vertical clips for TikTok.</p>
+      <h1 class="mark">Miroir Sonore</h1>
+      <p class="tag">Drop an image and a sound. Pick a direction, let Auto change the look on the beat, then record a clip, save an image or keep the look.</p>
     </div>
     <p class="spec" id="spec">720 × 1280 · 30 fps</p>
   </header>
@@ -33,9 +33,12 @@
       </button>
       <div class="recbadge" id="recBadge" hidden><i></i><span id="recTime">REC 0:00 / 0:15</span></div>
       <div class="recbar" id="recBar" hidden><i id="recFill"></i></div>
+      <button class="corner" id="fsBtn" type="button" aria-label="Full screen">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
+      </button>
     </div>
-    <button class="exitfs" id="exitFs" type="button" aria-label="Exit full screen">
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <button class="corner exitfs" id="exitFs" type="button" aria-label="Exit full screen">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
     </button>
 
     <div class="side" id="side">
@@ -51,18 +54,15 @@
       <div class="macros" id="macros"></div>
       <div class="quick">
         <button class="switch" id="autoT" type="button" aria-pressed="true"><i></i>Auto</button>
-        <button class="qbtn" id="shuffle" type="button">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 3l1 2c1 2 2 3 4 3H17M14.5 11.5 17 14l-2.5 2.5M3 14h3.5c1.2 0 2-.4 2.7-1.1M11.8 7.1C12.5 6.4 13.3 6 14.5 6H17M14.5 3.5 17 6l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Shuffle
-        </button>
-        <button class="qbtn" id="fsBtn" type="button">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Full screen
+        <button class="qbtn" id="shuffle" type="button" aria-label="Shuffle the look">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h3.5c2 0 3 1 4 3l1 2c1 2 2 3 4 3H17M14.5 11.5 17 14l-2.5 2.5M3 14h3.5c1.2 0 2-.4 2.7-1.1M11.8 7.1C12.5 6.4 13.3 6 14.5 6H17M14.5 3.5 17 6l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Shuffle</span>
         </button>
       </div>
       <div class="mini" id="miniTrips" role="group" aria-label="Trip"></div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
       <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
       <div class="mini" id="miniPump" role="group" aria-label="Pump style"></div>
-      <button class="recbtn mini-rec" id="recMini" type="button" disabled><i></i><span id="recMiniLbl">Record 15s</span></button>
+      <div class="mini" id="miniKept" role="group" aria-label="Kept looks" hidden></div>
       <div class="leds" aria-hidden="true">
         <span class="led"><em id="lKick"></em>KICK</span>
         <span class="led"><em id="lSnare"></em>SNARE</span>
@@ -74,6 +74,15 @@
         <div class="meter"><span>LOW</span><b><i id="mLow"></i></b></div>
         <div class="meter"><span>MID</span><b><i id="mMid"></i></b></div>
         <div class="meter"><span>HIGH</span><b><i id="mHigh"></i></b></div>
+      </div>
+      <div class="acts" id="acts">
+        <button class="act" id="shotBtn" type="button">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5.5" y="2.5" width="9" height="15" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="2.2" fill="currentColor"/></svg>Image
+        </button>
+        <button class="recbtn" id="recMini" type="button" disabled><i></i><span id="recMiniLbl">Record 15s</span></button>
+        <button class="act" id="keepBtn" type="button">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.5" y="3.5" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.6 2"/><path d="M10 7v6M7 10h6" stroke="currentColor" stroke-width="1.6"/></svg>Keep
+        </button>
       </div>
     </div>
 
@@ -93,9 +102,9 @@
       <div class="src">
         <label class="tile" for="imgIn">
           <canvas class="thumb" id="thumb" width="96" height="96"></canvas>
-          <span class="tile-txt"><b>Image</b><span id="imgName">Sample image (generated)</span></span>
+          <span class="tile-txt"><b>Picture</b><span id="imgName">Sample image (generated)</span></span>
           <span class="tile-act">Choose</span>
-          <input class="vh" id="imgIn" type="file" accept="image/*">
+          <input class="vh" id="imgIn" type="file" accept="image/*,video/*">
         </label>
         <label class="tile" for="sndIn">
           <span class="wave"><svg viewBox="0 0 28 28" aria-hidden="true"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 11v6M9 7v14M14 4v20M19 9v10M24 12v4"/></g></svg></span>
@@ -104,7 +113,13 @@
           <input class="vh" id="sndIn" type="file" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
         </label>
       </div>
-      <p class="note">Or drag files anywhere onto the page. A video file works as a sound source too.</p>
+      <p class="note">The picture can be an image or a video. The sound can be a track or a video's own sound. Dropping a video onto the page uses it for both.</p>
+    </section>
+
+    <section class="sec" data-tab="direction">
+      <h2 class="lab">Kept looks</h2>
+      <div class="kept" id="kept" role="group" aria-label="Kept looks"></div>
+      <p class="note" id="keptNote"></p>
     </section>
 
     <section class="sec" data-tab="trip">
@@ -164,12 +179,12 @@
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · S shuffle · A auto · T trip · P pump style · F full screen · 1–7 modes</p>
+      <p class="keys">Space play · R record · I image · K keep · S shuffle · A auto · T trip · P pump style · F full screen · 1–9 modes</p>
     </section>
   </aside>
 </div>
 
-<div class="drop" id="drop" hidden><p>Drop an image or a sound</p></div>
+<div class="drop" id="drop" hidden><p>Drop a picture, a video or a sound</p></div>
 <div class="toast" id="toast" role="status" hidden></div>
 <!-- /build:markup -->
 <!-- build:js --><script type="module" src="src/main.js"></script><!-- /build:js -->

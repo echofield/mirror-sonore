@@ -1,6 +1,6 @@
 # CLAUDE.md — Miroir Sonore
 
-Audio-reactive visual tool: the user drops an image and a sound. A WebGL shader folds, warps and hits the image with the music. The user records vertical clips (TikTok/Reels) with the audio baked in. It is plain browser JavaScript (ES modules) with no framework, and esbuild bundles it into one HTML file.
+Audio-reactive visual tool: the user drops a picture (an image or a video) and a sound. A WebGL shader folds, warps and hits the picture with the music. The user records vertical clips (TikTok/Reels) with the audio baked in, saves still images, and keeps looks as presets. It is used mostly on a phone. It is plain browser JavaScript (ES modules) with no framework, and esbuild bundles it into one HTML file.
 
 ## Commands
 
@@ -12,7 +12,7 @@ npm run test:shaders        # compile shaders headlessly, render every mode → 
 npm run test:sim            # run dist/index.html in jsdom with a fake 120 BPM track; asserts behaviour
 npm test                    # build + both tests
 ```
-On Linux the tests need a virtual display: `xvfb-run -a npm test`. macOS runs them directly.
+On Linux the tests need a virtual display: `xvfb-run -a npm test`. macOS and Windows run them directly.
 
 Run `npm test` after any change to `src/gl`, `src/audio`, `src/auto.js`, `src/map.js` or `src/record.js`. Open `tests/out/modes.png` after shader changes. It is a grid of every mode × three directions, and the quickest way to see a visual regression.
 
@@ -25,7 +25,7 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 | `src/config.js` | Modes, color directions, fader definitions, defaults, export options. Start here for new modes/directions. |
 | `src/state.js` | Shared mutable state objects (see "State" below). Mutate fields; never reassign the exports. |
 | `src/gl/shaders.js` | GLSL ES 1.0. `mainFS` (mode transforms, palette grading, trip layer, feedback trails), `postFS` (glow, roll-off, vignette, grain), `copyFS` (tracer capture). |
-| `src/gl/renderer.js` | WebGL1 setup, ping-pong feedback targets (half-float when available), mipmapped image texture, uniform upload. |
+| `src/gl/renderer.js` | WebGL1 setup, ping-pong feedback targets (half-float when available), the held tracer frame, mipmapped image texture or a video's current frame (`useVideo`), the one-row Wave data texture, uniform upload. |
 | `src/audio/engine.js` | `<audio>` → analyser graph, band envelopes, spectral-flux onsets (kick/snare/hat), tempo from kick intervals, drop detection. Fires `on.kick/snare/hat/drop`. |
 | `src/audio/sample-loop.js` | Offline-synthesised 16 s demo loop (groove → breakdown → drop) encoded to WAV. |
 | `src/image/palette.js` | k-means palette from the loaded image → the "Picture" direction. |
@@ -33,10 +33,14 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 | `src/map.js` | Sound → uniforms. Hit reactions (`reactKick`, `reactSnare`) and the per-frame `step`. |
 | `src/auto.js` | Looks, directions, trips (`setTrip`), Shuffle, the Auto engine (new look on a kick every N bars and on drops), Morph/Cut transitions. |
 | `src/ui.js` | Builds controls from config, `syncUI`, phone tabs, full screen (CSS immersive + optional Fullscreen API), results list, keyboard. |
-| `src/record.js` | Recording sessions (1/3/5 clips), MediaRecorder, saving (Artifact downloads capability, else share sheet, else download link). |
+| `src/record.js` | Recording sessions (1/3/5 clips), MediaRecorder, still images (`takeStill`: the canvas as a PNG at full output size), saving (Artifact downloads capability, else share sheet, else download link). |
+| `src/presets.js` | Kept looks: `keepLook` snapshots everything the controls say plus a thumbnail, `applyKept` brings one back (values checked against today's ranges). Stored in `localStorage`, 12 at most. |
 | `src/view.js` | Output size from format/quality; adaptive preview scale (1 → .75 → .5 on slow devices, forced to 1 while recording). |
 | `index.html` | Markup template with `build:*` markers that `scripts/build.mjs` replaces. |
-| `src/styles.css` | All styles. Desktop, phone (`max-width:880px`) and full screen (`body.immersive`) layouts. |
+| `src/styles.css` | All styles. Phone (`max-width:880px`), mid, wide (`min-width:1180px`) and full screen (`body.immersive`) layouts, light (paper) and dark themes from one token set. |
+
+### Look and feel
+The interface follows IFAH's paper direction. Colour is semantic: ink is what is read and the main act (Record, Play), blue is what the hand sets (faders, pressed choices, the waiting Keep frame), rust is time and now (playhead, hit lights, recording, the hold-to-remove bar). Type has four roles: Archivo wide for the name and numbers, Archivo for rows, Newsreader for the user's own material (file names), IBM Plex Mono caps for labels. Corners are 2px, frames are hairlines, sections are printed with a rule in ink and a label. Every colour is a token on `:root`; the dark blocks only redefine tokens. On a phone the three acts (Image · Record · Keep) are fixed at the bottom and touch targets are 40px or more.
 
 ### State
 - `P`: what the controls say. `V`: live values that ease toward `P` (time constant `G.easeTau`; Auto raises it so changes glide). Shaders read `V` for continuous params and `P` for discrete ones (`mode`, `seg`).
@@ -48,7 +52,10 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 ### Rules that matter
 - **Beat, Pump and Flow are the user's.** `V.beat` scales hit effects (glitch, color split, ripples, jolts, drop flash). `V.pump` and `PUMP.style`/`PUMP.len` control the kick "sidechaining" the picture: Off, Duck, Punch or Breathe, with a length in notes synced to the detected tempo. `V.flow` scales continuous audio motion. Auto and Shuffle must never change any of them.
 - **Pump is the only path from kick/bass to zoom, brightness, contrast and glow** (`pumpShape` in `map.js`). Don't add kick or bass terms to those uniforms elsewhere, or Pump Off stops meaning "no pumping". Moving a Look fader (punch, glitch, warp, trails, spin, zoom, folds, mode) turns Auto off. Color/texture faders and macros do not.
-- **Mode ids are fixed**: 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite. They are referenced in `config.js` (`DIRS[*].modes`, `FOLD_MODES`, `HOLO`), `shaders.js` (`uMode` branches) and `auto.js` (per-mode tweaks).
+- **A kept look is the user's whole setup**, so bringing one back does set Beat, Pump, Flow, pump style and Auto. That is the one exception to the rule above.
+- **Wave (mode 7)** keeps the picture upright and in place. `map.js` fills `WV.tex` (128 × 1): red is the spectrum standing in place (bass in the middle), green is the level history that enters on the left and crosses in one bar. Warp sets the height, Folds the number of ripples, Spin slides the picture sideways.
+- **A video picture** plays muted and follows the sound's clock (`syncVideo` in `main.js`), so one section of the track always shows the same frames. A video dropped on the page is both picture and sound.
+- **Mode ids are fixed**: 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite, 7 Wave. They are referenced in `config.js` (`DIRS[*].modes`, `FOLD_MODES`, `HOLO`), `shaders.js` (`uMode` branches) and `auto.js` (per-mode tweaks).
 - **WebGL1 / GLSL ES 1.0 only** (older iPhones). Loops need constant bounds. `smoothstep(a, b, x)` needs `a < b`. Avoid `texture2D` inside non-uniform control flow: compute the coordinate in the loop and sample after it (see the Fractal branch).
 - Kaleido and Mirror fold **before** the warp; otherwise the symmetry breaks.
 - **Audio graph**: `createMediaElementSource` can be called once per element, so swap `audio.src` instead of making new elements. Create or resume the AudioContext only inside a user gesture (`ensureCtx`). `navigator.audioSession.type = 'playback'` lets iOS play with the silent switch on.
@@ -66,7 +73,8 @@ Each trip is also registered as a hidden entry in `DIRS`, so its palette and mod
 ### Publishing as a claude.ai Artifact
 `dist/artifact.html` is a fragment: no `<html>/<head>/<body>`, because the Artifact host adds its own skeleton. Inside an Artifact:
 - Only Google Fonts may load from outside. Scripts can come only from the CDN allowlist, so keep everything bundled.
-- Downloads must go through `window.claude.use('downloads')`. `record.js/saveBlob` already does this. Declare the `downloads` capability when publishing.
+- Downloads must go through `window.claude.use('downloads')`. `record.js/saveBlob` already does this. Declare the `downloads` capability when publishing (`capabilities: {downloads: true}`).
+- Kept looks use `localStorage`, which belongs to one browser: a phone and a computer each have their own row.
 - `alert/confirm/prompt` do nothing. The Fullscreen API may be refused, which is why the CSS immersive layout exists.
 
 ### Recipes

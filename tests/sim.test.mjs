@@ -1,6 +1,7 @@
 // Runs the built page (dist/index.html) in jsdom with headless WebGL and a fake 120 BPM track
 // (kick on every beat, snare on 2 and 4, hats on the off-beats, a breakdown from 8 s to 12 s).
-// Checks tempo, hit and drop detection, Auto, the controls, full screen and multi-clip recording.
+// Checks tempo, hit and drop detection, Auto, the controls, the Wave mode, kept looks, still images,
+// full screen and multi-clip recording.
 // Linux needs a virtual display:  xvfb-run -a npm run test:sim   (run `npm run build` first)
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -9,7 +10,7 @@ const { JSDOM } = require('jsdom');
 
 const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
 const script = html.match(/<script>\n([\s\S]*)<\/script>/)[1];
-const dom = new JSDOM(html.replace(/<script>[\s\S]*<\/script>/, ''), { runScripts: 'outside-only', pretendToBeVisual: true });
+const dom = new JSDOM(html.replace(/<script>[\s\S]*<\/script>/, ''), { runScripts: 'outside-only', pretendToBeVisual: true, url: 'https://miroir.test/' });
 const w = dom.window, errors = [];
 w.addEventListener('error', e => errors.push(e.message));
 let simNow = 1000, rafCb = null;
@@ -27,6 +28,8 @@ const gl = new Proxy(glReal, { get(t, p) {
 const any = () => new Proxy(function () {}, { get: (t, p) => p === 'then' ? undefined : (p === Symbol.toPrimitive ? () => 0 : any()), apply: () => any(), set: () => true, construct: () => any() });
 w.HTMLCanvasElement.prototype.getContext = function (type) { return type === 'webgl' ? gl : any(); };
 w.HTMLCanvasElement.prototype.captureStream = () => ({ getVideoTracks: () => [{ stop() {} }] });
+w.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/jpeg;base64,AAAA';
+w.HTMLCanvasElement.prototype.toBlob = function (cb) { cb(new w.Blob(['x'.repeat(900)])); };
 w.HTMLMediaElement.prototype.play = function () { return Promise.resolve(); };
 w.MediaStream = class { constructor(t) { this.t = t; } getVideoTracks() { return this.t.slice(0, 1); } getAudioTracks() { return this.t.slice(1); } };
 let recorders = 0;
@@ -154,6 +157,34 @@ for (const b of $('fmts').children) { click(b); await run(.1); }
 click($('fmts').children[0]);
 for (const b of $('tabs').children) { click(b); }
 check($('rack').dataset.tab === 'export', 'tabs switch the rack: ' + $('rack').dataset.tab);
+// Wave: the level history crosses the picture and the spectrum stands in it
+const pressedIn = id => (Array.prototype.find.call($(id).children, b => b.getAttribute('aria-pressed') === 'true') || {}).textContent;
+click(Array.prototype.find.call($('modes').children, b => b.textContent === 'Wave')); await run(3);
+const wv = w.__ms.WV;
+check($('lookBadge').textContent.includes('Wave') && !$('foldRow').hidden, 'Wave mode is selectable and shows Folds: ' + $('lookBadge').textContent);
+check(Math.max(...wv.hist) > .3, 'Wave: kicks travel through the level history (peak ' + Math.max(...wv.hist).toFixed(2) + ')');
+check(wv.tex[64 * 4] > 20 && wv.tex[64 * 4 + 3] === 255, 'Wave: the spectrum stands in the picture (bass in the middle ' + wv.tex[64 * 4] + ')');
+
+// kept looks: keep one, change everything, bring it back, remove it, undo
+click($('dirs').children[2]); await run(.2);                                  // Neon
+const warp = $('f-warp'); warp.value = '0.66'; warp.dispatchEvent(new w.Event('input'));
+click(Array.prototype.find.call($('pumpStyle').children, b => b.dataset.v === 'Duck'));
+beat.value = '1.2'; beat.dispatchEvent(new w.Event('input'));
+click($('keepBtn')); await run(.2);
+const stored = () => JSON.parse(w.localStorage.getItem('miroir-sonore.kept.v1') || '[]');
+check($('kept').children.length === 2 && stored().length === 1, 'Keep adds a look to the row and to storage: ' + stored().map(k => k.name).join(', '));
+check($('miniKept').children.length === 1 && !$('miniKept').hidden, 'the kept look is also in full screen');
+click($('dirs').children[4]); click($('modes').children[2]); click($('pumpStyle').children[0]);
+beat.value = '0.2'; beat.dispatchEvent(new w.Event('input')); warp.value = '0.1'; warp.dispatchEvent(new w.Event('input')); await run(.3);
+click($('kept').children[1]); await run(.3);
+check($('lookBadge').textContent.startsWith('Neon') && warp.value === '0.66' && beat.value === '1.2' && pressedIn('pumpStyle') === 'Duck'
+  && $('autoT').getAttribute('aria-pressed') === 'false', 'a kept look brings back direction, look, Beat, pump and Auto: ' + $('lookBadge').textContent);
+$('kept').children[1].dispatchEvent(new w.Event('pointerdown', { bubbles: true })); await tick(); await tick();
+check($('kept').children.length === 1 && stored().length === 0, 'holding a kept look removes it');
+click($('toast').querySelector('button')); await tick();
+check($('kept').children.length === 2 && stored().length === 1, 'Undo puts it back');
+beat.value = '0.8'; beat.dispatchEvent(new w.Event('input')); warp.value = '0.25'; warp.dispatchEvent(new w.Event('input'));
+
 click($('fsBtn')); await run(.2);
 check(w.document.body.classList.contains('immersive'), 'full screen opens');
 click($('exitFs')); await run(.2);
@@ -168,6 +199,12 @@ check($('results').children.length === 3, '3-clip session makes 3 clips: ' + $('
 check($('recLbl').textContent === 'Record 3 clips · 15s', 'session ends cleanly');
 click($('clips').children[2]); click($('recBtn')); await run(5); click($('recBtn')); await run(1); await tick(); await tick();
 check($('results').children.length === 4 && $('recBadge').hidden, 'stopping mid-session keeps the clip and ends: ' + $('results').children.length);
+// still image
+click($('shotBtn')); await run(.2);
+const lastCard = $('results').lastChild;
+check($('results').children.length === 5 && !!lastCard.querySelector('img') && /\.png$/.test(lastCard.querySelector('b').textContent)
+  && lastCard.querySelector('.savebtn').textContent === 'Save image', 'Image saves a still as a PNG card: ' + lastCard.querySelector('small').textContent);
+check(!!$('toast').querySelector('button'), 'the still can be saved from the message');
 check(errors.length === 0, 'no runtime errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 console.log(failures ? failures + ' check(s) failed' : 'all checks passed');
 process.exit(failures ? 1 : 0);

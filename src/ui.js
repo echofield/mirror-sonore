@@ -2,6 +2,7 @@
 import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
 import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP } from './state.js';
 import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
+import { KEPT, keepLook, removeKept, restoreKept, applyKept } from './presets.js';
 
 export const el = {};
 const $ = id => document.getElementById(id);
@@ -12,7 +13,8 @@ const faders = {};
 export function initUI(handlers) {
   H = handlers;
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
-   'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'recMini', 'recMiniLbl',
+   'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'miniKept', 'recMini', 'recMiniLbl',
+   'shotBtn', 'keepBtn', 'kept', 'keptNote',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
    'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
@@ -64,10 +66,15 @@ export function initUI(handlers) {
   el.exitFs.addEventListener('click', () => setImmersive(false));
   el.recBtn.addEventListener('click', H.toggleRecord);
   el.recMini.addEventListener('click', H.toggleRecord);
+  el.shotBtn.addEventListener('click', H.takeStill);
+  el.keepBtn.addEventListener('click', keep);
+  renderKept();
+  setFill(el.scrub);
 
-  // phone tabs
+  // phone tabs; a link ending in #look (or any tab's name) opens on that tab
   Array.prototype.forEach.call(el.tabs.children, b => b.addEventListener('click', () => setTab(b.dataset.tab)));
-  setTab('sources');
+  const want = (location.hash || '').slice(1);
+  setTab(Array.prototype.some.call(el.tabs.children, b => b.dataset.tab === want) ? want : 'sources');
 
   // monitor: tap plays/pauses; in full screen it shows/hides the overlay instead
   el.monitor.addEventListener('click', e => {
@@ -81,7 +88,7 @@ export function initUI(handlers) {
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('immersive') && fsByApi) setImmersive(false); });
   document.addEventListener('webkitfullscreenchange', () => { if (!document.webkitFullscreenElement && document.body.classList.contains('immersive') && fsByApi) setImmersive(false); });
 
-  el.imgIn.addEventListener('change', e => { const f = e.target.files[0]; if (f) H.loadImageFile(f); e.target.value = ''; });
+  el.imgIn.addEventListener('change', e => { const f = e.target.files[0]; if (f) H.loadPictureFile(f); e.target.value = ''; });
   el.sndIn.addEventListener('change', e => { const f = e.target.files[0]; if (f) H.loadSoundFile(f); e.target.value = ''; });
   initDrop();
   initKeys();
@@ -119,7 +126,7 @@ export function updatePictureSwatch() {
 function pressed(group, value) {
   Array.prototype.forEach.call(group.children, b => b.setAttribute('aria-pressed', String(b.dataset.v === String(value))));
 }
-function setFill(input) { input.style.setProperty('--fill', ((input.value - input.min) / (input.max - input.min) * 100) + '%'); }
+function setFill(input) { input.style.setProperty('--f', String((input.value - input.min) / (input.max - input.min))); }
 
 // kind: 'macro' (stacked layout, never turns Auto off), 'look' (turns Auto off), null (color/texture)
 function buildFaders(container, defs, kind) {
@@ -225,10 +232,63 @@ export function setSoundReady(name) {
   el.recBtn.disabled = !H.canRecord(); el.recMini.disabled = !H.canRecord();
 }
 
+// act: an optional { label, fn } button inside the message (Save, Undo).
 let toastTimer = 0;
-export function toast(msg) {
-  el.toast.textContent = msg; el.toast.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.toast.hidden = true; }, 4200);
+export function toast(msg, act) {
+  el.toast.textContent = msg;
+  if (act) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = act.label;
+    b.addEventListener('click', () => { el.toast.hidden = true; act.fn(); });
+    el.toast.appendChild(b);
+  }
+  el.toast.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.toast.hidden = true; }, act ? 7000 : 4200);
+}
+
+// Kept looks: a row of small plates in the rack and in full screen. Tap brings one back, a hold removes it.
+function keep() {
+  const r = keepLook(el.view);
+  renderKept(r.item.id);
+  toast(!r.stored ? 'Kept until this page closes. This browser is not saving looks.'
+    : r.dropped ? 'Look kept. The oldest one made room.' : 'Look kept: ' + r.item.name + '.');
+}
+function dropKept(k) {
+  const r = removeKept(k.id);
+  renderKept();
+  toast('Removed ' + k.name + '.', { label: 'Undo', fn: () => { restoreKept(r); renderKept(k.id); } });
+}
+function renderKept(fresh) {
+  [el.kept, el.miniKept].forEach(g => {
+    g.textContent = '';
+    if (g === el.kept) {
+      const add = addBtn(g, 'add', 'Keep', keep, 'kt add');
+      add.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.6"/></svg>');
+      add.setAttribute('aria-label', 'Keep this look');
+    }
+    KEPT.forEach((k, i) => g.appendChild(keptTile(k, KEPT.length - i, k.id === fresh)));
+  });
+  el.miniKept.hidden = !KEPT.length;
+  el.keptNote.textContent = KEPT.length
+    ? 'Tap one to bring it back. Hold to remove it. Looks are kept in this browser.'
+    : 'Keep a look and it waits here with its direction, mode, colour, Beat, Pump and Flow, ready for any picture.';
+}
+function keptTile(k, n, fresh) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'kt' + (fresh ? ' new' : '');
+  b.title = k.name; b.setAttribute('aria-label', 'Bring back ' + k.name + '. Hold, or press Delete, to remove it.');
+  if (k.thumb) b.style.backgroundImage = 'url("' + k.thumb + '")';
+  const num = document.createElement('b'); num.textContent = (n < 10 ? '0' : '') + n; b.appendChild(num);
+  let timer = 0, held = false, x0 = 0, y0 = 0;
+  const cancel = () => { clearTimeout(timer); b.classList.remove('hold'); };
+  b.addEventListener('pointerdown', e => {
+    held = false; x0 = e.clientX; y0 = e.clientY; b.classList.add('hold');
+    timer = setTimeout(() => { held = true; cancel(); dropKept(k); }, 600);
+  });
+  b.addEventListener('pointermove', e => { if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 10) cancel(); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, cancel));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+  b.addEventListener('click', () => { if (held) { held = false; return; } applyKept(k); });
+  b.addEventListener('keydown', e => { if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); dropKept(k); } });
+  return b;
 }
 
 function setTab(t) {
@@ -263,15 +323,16 @@ function poke(e) {
   idleTimer = setTimeout(() => { if (H.isPlaying()) document.body.classList.add('ui-off'); }, 3000);
 }
 
-// Results list: newest at the bottom, each with its own save button.
-export function addResultCard(blob, name, info, first) {
-  const url = URL.createObjectURL(blob);
+// Results list: clips and still images, newest at the bottom, each with its own save button.
+export function addResultCard(blob, name, info, first, kind) {
+  const url = URL.createObjectURL(blob), still = kind === 'image';
   const card = document.createElement('div'); card.className = 'result';
-  card.innerHTML = '<video playsinline muted loop autoplay></video><div class="res-meta"><b></b><small></small><button class="savebtn" type="button">Save video</button><p class="note"></p></div>';
-  const vid = card.querySelector('video'), msg = card.querySelector('.note'), btn = card.querySelector('.savebtn');
+  card.innerHTML = (still ? '<img alt="">' : '<video playsinline muted loop autoplay></video>')
+    + '<div class="res-meta"><b></b><small></small><button class="savebtn" type="button">' + (still ? 'Save image' : 'Save video') + '</button><p class="note"></p></div>';
+  const vid = card.querySelector('video,img'), msg = card.querySelector('.note'), btn = card.querySelector('.savebtn');
   vid.addEventListener('error', () => { vid.hidden = true; });
   vid.src = url;
-  const vp = vid.play && vid.play(); if (vp && vp.catch) vp.catch(() => {});
+  const vp = !still && vid.play && vid.play(); if (vp && vp.catch) vp.catch(() => {});
   card.querySelector('b').textContent = name;
   card.querySelector('small').textContent = info;
   btn.addEventListener('click', async () => {
@@ -281,7 +342,7 @@ export function addResultCard(blob, name, info, first) {
   });
   el.results.appendChild(card);
   while (el.results.children.length > 10) {
-    const old = el.results.firstChild, ov = old.querySelector('video');
+    const old = el.results.firstChild, ov = old.querySelector('video,img');
     if (ov && ov.src) URL.revokeObjectURL(ov.src);
     el.results.removeChild(old);
   }
@@ -336,12 +397,14 @@ function initKeys() {
     const k = e.key;
     if (e.code === 'Space' && tag !== 'BUTTON') { e.preventDefault(); H.togglePlay(); }
     else if (k === 'r' || k === 'R') { if (!el.recBtn.disabled) H.toggleRecord(); }
+    else if (k === 'i' || k === 'I') H.takeStill();
+    else if (k === 'k' || k === 'K') keep();
     else if (k === 's' || k === 'S') shuffle();
     else if (k === 'a' || k === 'A') setAuto(!AUTO.on);
     else if (k === 't' || k === 'T') setTrip(TRIP_NAMES[(TRIP_NAMES.indexOf(G.trip || 'None') + 1) % TRIP_NAMES.length]);
     else if (k === 'p' || k === 'P') setPump(PUMP_STYLES[(PUMP_STYLES.indexOf(PUMP.style) + 1) % PUMP_STYLES.length], PUMP.len);
     else if (k === 'f' || k === 'F') setImmersive(!document.body.classList.contains('immersive'));
     else if (k === 'Escape' && document.body.classList.contains('immersive')) setImmersive(false);
-    else if (/^[1-7]$/.test(k)) setMode(parseInt(k, 10) - 1);
+    else if (/^[1-9]$/.test(k) && parseInt(k, 10) <= MODES.length) setMode(parseInt(k, 10) - 1);
   });
 }

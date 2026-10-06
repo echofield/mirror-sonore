@@ -2,7 +2,7 @@
 // A "look" is a mode plus character params (punch, glitch, warp, trails, spin, zoom).
 // Auto picks a new look inside the current direction on a kick every N bars, and on drops.
 // Transitions: Morph dissolves through the feedback buffer and glides params; Cut snaps on the beat with a flash.
-import { DIRS, TRIPS, DEFAULT_DIR } from './config.js';
+import { DIRS, TRIPS, DEFAULT_DIR, HAND_MODES } from './config.js';
 import { P, S, A, G, AUTO, BEAT, PUMP } from './state.js';
 import { syncUI, setAutoUI } from './ui.js';
 
@@ -93,6 +93,7 @@ export function setTrip(name) {
 }
 
 export function setMode(i) {
+  if (HAND_MODES[i] && P.mode !== i) { Object.assign(P, HAND_MODES[i]); G.easeTau = .4; }
   P.mode = i;
   if (AUTO.on) setAuto(false);
   S.morph = .6;          // a short dissolve even for manual mode changes

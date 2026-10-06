@@ -11,7 +11,7 @@ audio.preload = 'auto';
 // Event hooks, wired in main.js.
 export const on = { kick: null, snare: null, hat: null, drop: null };
 
-let actx = null, analyser = null, recDest = null, fbuf = null, prevBuf = null, RG = null;
+let actx = null, analyser = null, recDest = null, fbuf = null, prevBuf = null, RG = null, SPEC = null;
 
 // Must run inside a user gesture (iOS/Chrome autoplay rules). Safe to call repeatedly.
 export function ensureCtx() {
@@ -32,6 +32,8 @@ export function ensureCtx() {
   const idx = (lo, hi) => [Math.max(1, Math.floor(lo / hz)), Math.min(fbuf.length - 1, Math.ceil(hi / hz))];
   RG = { low: idx(35, 130), mid: idx(300, 2500), high: idx(5000, 14000), all: idx(35, 14000),
          kick: idx(35, 150), snare: idx(1000, 4500), hat: idx(7000, 15000) };
+  const n = A.spec.length, edge = i => 40 * Math.pow(300, i / n);   // 40 Hz → 12 kHz
+  SPEC = Array.from({ length: n }, (_, i) => idx(edge(i), edge(i + 1)));
 }
 export const recordStream = () => recDest && recDest.stream;
 
@@ -84,6 +86,10 @@ export function analyse(dt) {
   }
   const env = (cur, target, att, rel) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? att : rel)));
   A.low = env(A.low, lo, .012, .14); A.mid = env(A.mid, mi, .04, .3); A.high = env(A.high, hi, .01, .1); A.lvl = env(A.lvl, lv, .08, .6);
+  for (let i = 0, n = A.spec.length; i < n; i++) {
+    const v = playing ? clamp((avg(SPEC[i]) - .22) / .6 * (1 + .6 * i / n)) : 0;   // the tilt lifts the quieter top end
+    A.spec[i] = env(A.spec[i], v, .02, .2);
+  }
   if (playing) {
     // Drop: bass-weighted energy jumps well above its recent average, after a 4 s warm-up.
     const dv = .6 * lo + .4 * lv;

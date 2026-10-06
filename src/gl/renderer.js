@@ -1,9 +1,11 @@
-// WebGL1 renderer: two programs, ping-pong feedback targets, mipmapped image texture.
+// WebGL1 renderer: three programs, ping-pong feedback targets, a held tracer frame, mipmapped image
+// texture (or a video's current frame), and a one-row data texture for the Wave mode.
 import { VS, mainFS, postFS, copyFS } from './shaders.js';
-import { G, P, V, S, U } from '../state.js';
+import { G, P, V, S, U, WV, WAVE_N } from '../state.js';
+import { WAVE } from '../config.js';
 
-let gl, MAIN, POST, COPY, imgTex, aniso, fbType, targets = [], echo = null, last = 0, rw = 0, rh = 0;
-let onThumb = null;
+let gl, MAIN, POST, COPY, imgTex, waveTex, aniso, fbType, targets = [], echo = null, last = 0, rw = 0, rh = 0;
+let onThumb = null, vid = null, vidT = -1;
 
 export function initRenderer(canvas, thumbCb) {
   onThumb = thumbCb;
@@ -22,6 +24,9 @@ export function initRenderer(canvas, thumbCb) {
 
   fbType = detectHalfFloat();
   imgTex = gl.createTexture();
+  waveTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, waveTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, WAVE_N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, WV.tex);
+  clampLinear();
   aniso = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
   return null;
 }
@@ -62,13 +67,16 @@ function detectHalfFloat() {
   return ok ? hf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
 }
 
-function makeTarget(w, h) {
-  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, fbType, null);
+function clampLinear() {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+}
+function makeTarget(w, h) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, fbType, null);
+  clampLinear();
   const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
   gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -89,6 +97,7 @@ export function setRenderSize(canvas, w, h) {
 
 // Draw any image source into a power-of-two square so it can mipmap (no seams when tiled small).
 export function uploadImage(src, w, h) {
+  vid = null;
   const size = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096 ? 2048 : 1024;
   const c = document.createElement('canvas'); c.width = c.height = size;
   c.getContext('2d').drawImage(src, 0, 0, size, size);
@@ -106,7 +115,27 @@ export function uploadImage(src, w, h) {
   if (onThumb) onThumb(src, w, h);
 }
 
+// A video as the picture. Its frames go straight to the texture as they change (no mipmaps:
+// a video frame is not a power of two, and building them 30 times a second would cost too much).
+export function useVideo(video, w, h) {
+  vid = video; vidT = -1;
+  G.imgAspect = w / h;
+  if (uploadVideoFrame() && onThumb) onThumb(video, w, h);
+}
+function uploadVideoFrame() {
+  if (!vid || vid.readyState < 2 || vid.currentTime === vidT) return false;
+  gl.bindTexture(gl.TEXTURE_2D, imgTex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vid); }
+  catch (e) { gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); return false; }
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  clampLinear();
+  vidT = vid.currentTime;
+  return true;
+}
+
 export function render(now) {
+  uploadVideoFrame();
   const src = targets[last], dst = targets[1 - last];
   gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f);
   gl.viewport(0, 0, rw, rh);
@@ -114,6 +143,8 @@ export function render(now) {
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, imgTex); ui1(MAIN, 'uImg', 0);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src.t); ui1(MAIN, 'uPrev', 1);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, echo.t); ui1(MAIN, 'uEchoTex', 2);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, waveTex); ui1(MAIN, 'uWave', 3);
+  if (P.mode === WAVE) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, WAVE_N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, WV.tex);
   u1(MAIN, 'uLattice', U.lattice); u1(MAIN, 'uLatScale', U.latScale); u1(MAIN, 'uLatWarp', V.latWarp); u1(MAIN, 'uEcho', U.echo); u1(MAIN, 'uBreath', U.breath);
   u2(MAIN, 'uRes', rw, rh); u2(MAIN, 'uDrift', U.dx, U.dy); u2(MAIN, 'uTilt', U.tx, U.ty); u2(MAIN, 'uJulia', U.jx, U.jy);
   u3(MAIN, 'uP0', G.pal[0]); u3(MAIN, 'uP1', G.pal[1]); u3(MAIN, 'uP2', G.pal[2]); u3(MAIN, 'uP3', G.pal[3]); u3(MAIN, 'uBg', G.bg);
@@ -125,6 +156,7 @@ export function render(now) {
   u1(MAIN, 'uFbRot', U.fbRot); u1(MAIN, 'uPalMix', V.palMix); u1(MAIN, 'uPalPhase', S.palPhase);
   u1(MAIN, 'uSlice', U.slice); u1(MAIN, 'uSliceSeed', S.sliceSeed); u1(MAIN, 'uHolo', U.holo); u1(MAIN, 'uBands', V.bands);
   u1(MAIN, 'uSparkle', U.sparkle); u1(MAIN, 'uBump', V.bump); u1(MAIN, 'uPokeAmp', U.pokeAmp);
+  u1(MAIN, 'uWaveAmp', U.waveAmp); u1(MAIN, 'uWaveT', S.waveT); u1(MAIN, 'uWaveX', S.waveX);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
   if (U.capture) {                       // stepped tracers: hold this frame until the next capture

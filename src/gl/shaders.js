@@ -2,17 +2,17 @@
 //   MAIN  — samples the image through the current mode's coordinate transform, grades it,
 //           and blends with the previous frame (feedback trails). Renders into a ping-pong target.
 //   POST  — glow, highlight roll-off, vignette, film grain. Renders to the canvas.
-// Modes (uMode): 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite.
+// Modes (uMode): 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite, 7 Wave.
 // Unused uniforms are fine: the renderer skips locations the compiler optimised away.
 
 export const VS = 'attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }';
 
 export const mainFS = prec => prec + `
-uniform sampler2D uImg; uniform sampler2D uPrev;
+uniform sampler2D uImg; uniform sampler2D uPrev; uniform sampler2D uWave;
 uniform vec2 uRes; uniform vec2 uDrift; uniform vec2 uTilt; uniform vec2 uJulia;
 uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform vec3 uBg; uniform vec3 uPoke;
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
-uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp;
+uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveX;
 uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -61,7 +61,7 @@ void main(){
   // breathing: slow radial swelling plus an organic bulge, independent of the beat
   p *= 1.0 + uBreath*(0.05*sin(length(p)*7.0 - uT*1.3) + 0.06*(fbm(p*1.3 + uT*0.08) - 0.5));
   if(uMode < 0.5) p.x = abs(p.x);          // Mirror: fold first so the symmetry stays on screen
-  p = rot(uRot)*p;
+  if(uMode < 6.5) p = rot(uRot)*p;         // Wave keeps the picture upright
   vec3 col; float fog = 1.0;
 
   if(uMode > 3.5 && uMode < 4.5){
@@ -119,7 +119,7 @@ void main(){
     col = gradeMap(col);
 
   } else {
-    // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite ----
+    // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite, Wave ----
     vec2 q;
     if(uMode > 0.5 && uMode < 1.5){        // Kaleido: fold before the warp so symmetry holds
       float r = length(p); float a = atan(p.y, p.x);
@@ -129,7 +129,7 @@ void main(){
       p = r*vec2(cos(a), sin(a));
     }
     vec2 w = vec2(fbm(p*2.3 + vec2(0.0, uT*0.21)), fbm(p*2.3 + vec2(5.2, -uT*0.17))) - 0.5;
-    p += w*uWarp;
+    p += w*uWarp*(uMode > 6.5 ? 0.3 : 1.0);
     if(uMode < 1.5){
       q = p;
     } else if(uMode < 2.5){                // Tunnel
@@ -140,6 +140,11 @@ void main(){
     } else if(uMode < 3.5){                // Liquid
       vec2 w2 = vec2(fbm(p*1.6 + w*2.5 + uT*0.07), fbm(p*1.6 - w*2.5 - uT*0.05 + 3.1)) - 0.5;
       q = p + w2*uWarp*1.4;
+    } else if(uMode > 6.5){                // Wave: the picture stays in place and the music runs through it
+      float x = fc.x/uRes.x;
+      vec4 wv = texture2D(uWave, vec2(x, 0.5));   // r: spectrum standing in place, g: level history crossing left to right
+      float trav = wv.g*sin((x - uWaveT)*3.14159265*uSeg);
+      q = vec2(p.x - uWaveX, p.y/(1.0 + 1.8*uWaveAmp*wv.r) - 0.22*uWaveAmp*trav);
     } else {                               // Infinite: log-polar zoom, mirrored per octave, with folds and spiral
       float r = max(length(p), 0.0001); float lr = log(r); float a = atan(p.y, p.x);
       float seg = 6.2831853/uSeg;
@@ -149,7 +154,7 @@ void main(){
       q = vec2(cos(a), sin(a))*exp(m)*0.24;
       fog = smoothstep(0.0, 0.025, r);
     }
-    q += uDrift;
+    if(uMode < 6.5) q += uDrift;
     vec2 uv = vec2(q.x/uAspect, q.y) + 0.5;
     vec2 dir = normalize(p0 + 0.00001)*uChroma*0.006;
     col.r = texture2D(uImg, mr(uv + dir)).r;

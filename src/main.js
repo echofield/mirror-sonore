@@ -1,6 +1,6 @@
 // Boot and the frame loop. Order per frame: clock → analysis → Auto → mapping → render → HUD → recording.
-import { G, SESSION, U, V, S, PUMP, BEAT } from './state.js';
-import { initRenderer, uploadImage, render } from './gl/renderer.js';
+import { G, SESSION, U, V, S, PUMP, BEAT, WV } from './state.js';
+import { initRenderer, uploadImage, useVideo, render } from './gl/renderer.js';
 import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
 import { makeSampleLoop } from './audio/sample-loop.js';
 import { makeSampleImage } from './image/sample-image.js';
@@ -9,10 +9,17 @@ import { step, reactKick, reactSnare } from './map.js';
 import { setDirection, setAuto, autoTick, autoOnKick, autoOnDrop, applyPalette } from './auto.js';
 import { initUI, el, toast, setPlaying, setSoundReady, updateHUD, updatePictureSwatch, drawThumb, setFill, syncExport } from './ui.js';
 import { initView, applySize, adaptQuality } from './view.js';
-import { MIME, EXT, initRecord, canRecord, toggleRecord, recordTick, saveBlob, stopClip, isClipActive } from './record.js';
+import { MIME, EXT, initRecord, canRecord, toggleRecord, recordTick, saveBlob, stopClip, isClipActive, takeStill } from './record.js';
 import { DEFAULT_DIR } from './config.js';
 
 let soundURL = null, soundReady = false, scrubbing = false;
+
+// A video can be the picture. It plays muted and follows the sound's clock, so the same section
+// of the track always shows the same frames (which keeps the clips of one session comparable).
+const video = document.createElement('video');
+video.muted = true; video.loop = true; video.playsInline = true; video.preload = 'auto';
+video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
+let videoURL = null, videoOn = false;
 
 function boot() {
   const canvas = document.getElementById('view');
@@ -26,7 +33,7 @@ function boot() {
   initView(canvas);
   initRecord(canvas);
   initUI({
-    togglePlay, routeFile, loadImageFile, loadSoundFile, applySize, saveBlob,
+    togglePlay, routeFile, loadPictureFile, loadSoundFile, applySize, saveBlob, takeStill,
     toggleRecord: () => toggleRecord(soundReady),
     soundReady: () => soundReady, canRecord, isPlaying: () => !audio.paused, ext: MIME ? EXT : ''
   });
@@ -77,9 +84,38 @@ function togglePlay() {
   else audio.pause();
 }
 
+const isVideo = f => (f.type || '').indexOf('video/') === 0 || /\.(mp4|mov|m4v|webm)$/i.test(f.name || '');
+function loadPictureFile(file) { if (isVideo(file)) loadVideoFile(file); else loadImageFile(file); }
+function dropVideo() {
+  videoOn = false; video.pause();
+  if (videoURL) { URL.revokeObjectURL(videoURL); videoURL = null; video.removeAttribute('src'); video.load(); }
+}
+function loadVideoFile(file) {
+  const url = URL.createObjectURL(file);
+  dropVideo();
+  videoURL = url;
+  video.onloadeddata = () => {
+    if (videoURL !== url || !video.videoWidth) return;
+    videoOn = true;
+    useVideo(video, video.videoWidth, video.videoHeight);
+    el.imgName.textContent = file.name || 'Video';
+  };
+  video.onerror = () => { if (videoURL === url) { dropVideo(); toast('That video could not be opened. Try an MP4 or MOV file.'); } };
+  video.src = url; video.load();
+  // phones decode the first frame only once the video has been asked to play
+  const p = video.play(); if (p && p.then) p.then(() => { if (audio.paused) video.pause(); }).catch(() => {});
+}
+function syncVideo(playing) {
+  if (!videoOn || !(video.duration > 0)) return;
+  if (playing && video.paused) { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
+  else if (!playing && !video.paused) video.pause();
+  const want = audio.currentTime % video.duration;
+  if (!video.seeking && Math.abs(video.currentTime - want) > (playing ? .3 : .05)) video.currentTime = want;
+}
+
 function loadImageFile(file) {
   const url = URL.createObjectURL(file), img = new Image();
-  img.onload = () => { uploadImage(img, img.naturalWidth, img.naturalHeight); el.imgName.textContent = file.name || 'Image'; URL.revokeObjectURL(url); };
+  img.onload = () => { dropVideo(); uploadImage(img, img.naturalWidth, img.naturalHeight); el.imgName.textContent = file.name || 'Image'; URL.revokeObjectURL(url); };
   img.onerror = () => { URL.revokeObjectURL(url); toast('That image could not be opened. Try a JPG, PNG or WebP.'); };
   img.src = url;
 }
@@ -97,8 +133,9 @@ function loadSoundFile(file) { setSound(URL.createObjectURL(file), file.name || 
 function routeFile(f) {
   const t = f.type || '', n = (f.name || '').toLowerCase();
   if (t.indexOf('image/') === 0 || /\.(png|jpe?g|webp|gif|avif|bmp)$/.test(n)) loadImageFile(f);
-  else if (t.indexOf('audio/') === 0 || t.indexOf('video/') === 0 || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|aiff?|mp4|mov|webm)$/.test(n)) loadSoundFile(f);
-  else toast('Drop an image (JPG, PNG, WebP) or a sound (MP3, WAV, M4A).');
+  else if (isVideo(f)) { loadVideoFile(f); loadSoundFile(f); }   // a dropped video is the picture and the sound
+  else if (t.indexOf('audio/') === 0 || /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|aiff?)$/.test(n)) loadSoundFile(f);
+  else toast('Drop an image (JPG, PNG, WebP), a video (MP4, MOV) or a sound (MP3, WAV, M4A).');
 }
 
 let prevNow = performance.now();
@@ -107,6 +144,7 @@ function frame(now) {
   const playing = !audio.paused;
   if (playing) G.clock += dt;
   analyse(dt);
+  syncVideo(playing);
   autoTick(playing);
   step(dt);
   render(now);
@@ -117,5 +155,5 @@ function frame(now) {
 }
 
 // Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
-if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT };
+if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV };
 boot();

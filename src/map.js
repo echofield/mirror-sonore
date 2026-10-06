@@ -4,8 +4,8 @@
 //   V.pump — the kick "sidechaining" the picture (zoom, brightness, contrast), shaped by PUMP.style/len
 //   V.flow — continuous motion driven by the music
 // Pump is the only place the kick or bass moves zoom and brightness, so Pump Off means no pumping.
-import { A, S, V, P, U, G, BEAT, PUMP } from './state.js';
-import { KEYS, HOLO, PUMP_LENGTHS, ECHO_RATES } from './config.js';
+import { A, S, V, P, U, G, BEAT, PUMP, WV, WAVE_N } from './state.js';
+import { KEYS, HOLO, WAVE, PUMP_LENGTHS, ECHO_RATES } from './config.js';
 
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -96,6 +96,25 @@ export function step(dt) {
   U.jx = jr * Math.cos(S.jul); U.jy = jr * Math.sin(S.jul);
   U.grain = V.grain * (.75 + .7 * ht + .3 * hi);
   U.glow = V.glow * (.6 + .8 * drop) * (1 + Math.max(0, pm.b) * 3);   // glow pulses only with Punch/Breathe pumping
+
+  // Wave: the level enters on the left and crosses the picture in one bar, while the spectrum stands
+  // in place (bass in the middle, top end at the edges). Warp sets the height, Spin slides the picture sideways.
+  const span = Math.max(.8, BEAT.period * 4);
+  S.waveAcc += dt * WAVE_N / span;
+  const sh = Math.min(WAVE_N, Math.floor(S.waveAcc)); S.waveAcc -= Math.floor(S.waveAcc);
+  if (sh > 0) { WV.hist.copyWithin(sh, 0); WV.hist.fill(clamp(.6 * lo + .9 * k), 0, sh); }
+  S.waveT = (S.waveT + dt / span) % 2;
+  S.waveX += dt * V.spin * .28 * (.25 + lv) * sl;
+  U.waveAmp = V.warp * (.7 + .5 * mi);
+  if (P.mode === WAVE) {
+    const top = A.spec.length - 1;
+    for (let i = 0; i < WAVE_N; i++) {
+      const b = Math.abs(i / (WAVE_N - 1) - .5) * 2 * top, b0 = Math.floor(b), b1 = Math.min(top, b0 + 1);
+      WV.tex[i * 4] = 255 * clamp((A.spec[b0] + (A.spec[b1] - A.spec[b0]) * (b - b0)) * F);
+      WV.tex[i * 4 + 1] = 255 * WV.hist[i];
+      WV.tex[i * 4 + 3] = 255;
+    }
+  }
 
   // trip layer
   G.arc = journeyArc();

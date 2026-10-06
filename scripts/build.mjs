@@ -4,8 +4,9 @@
 //                         the Artifact host wraps it in its own skeleton)
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));   // .pathname gives "/C:/…" on Windows
 const tpl = readFileSync(root + 'index.html', 'utf8');
 const css = readFileSync(root + 'src/styles.css', 'utf8');
 const out = await build({ entryPoints: [root + 'src/main.js'], bundle: true, format: 'iife', target: 'es2019', write: false, legalComments: 'none' });

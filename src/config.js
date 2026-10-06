@@ -1,10 +1,15 @@
 // Static configuration: modes, color directions, fader definitions, export options.
 // Everything the user can pick lives here, so adding a mode or a direction starts in this file.
 
-export const MODES = ['Mirror', 'Kaleido', 'Tunnel', 'Liquid', 'Holo', 'Fractal', 'Infinite'];
-// Modes that use the "Folds" fader (angular symmetry count).
-export const FOLD_MODES = [1, 2, 6];
+export const MODES = ['Mirror', 'Kaleido', 'Tunnel', 'Liquid', 'Holo', 'Fractal', 'Infinite', 'Wave'];
+// Modes that use the "Folds" fader (angular symmetry count; in Wave, the number of ripples across the picture).
+export const FOLD_MODES = [1, 2, 6, 7];
 export const HOLO = 4;
+export const WAVE = 7;
+// Modes Auto never picks (no direction or trip lists them). Choosing one by hand sets this starting look.
+export const HAND_MODES = {
+  7: { warp: .55, spin: .22, zoom: 1, trails: .4, seg: 6 }
+};
 
 // A direction is a color world plus the modes Auto/Shuffle may pick inside it.
 // pal: 4 colors dark → light, used as a gradient map and cycled on the beat.

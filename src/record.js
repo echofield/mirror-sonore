@@ -1,11 +1,14 @@
 // Recording: canvas.captureStream(30) + the audio graph's MediaStreamDestination → MediaRecorder.
 // A session records 1, 3 or 5 clips; clips after the first replay the same section with a new look.
+// A still image is the canvas itself, saved as a PNG at the full output size.
 import { LENS, MODES } from './config.js';
 import { G, P, S, AUTO, OUT, SESSION } from './state.js';
 import { audio, ensureCtx, recordStream } from './audio/engine.js';
 import { lookFor, applyLook } from './auto.js';
 import { el, toast, lockExport, setRecUI, addResultCard } from './ui.js';
 import { setOutputScale } from './view.js';
+
+const stamp = () => { const d = new Date(), z = n => (n < 10 ? '0' : '') + n; return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`; };
 
 export const MIME = pickMime();
 export const EXT = MIME.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
@@ -17,7 +20,7 @@ function pickMime() {
   return '';
 }
 
-let canvas = null, recorder = null, chunks = [], recT0 = 0, recLen = 0, clipActive = false, wakeLock = null, clipLabel = '', resultCount = 0;
+let canvas = null, recorder = null, chunks = [], recT0 = 0, recLen = 0, clipActive = false, wakeLock = null, clipLabel = '', resultCount = 0, clipCount = 0, stillWait = 0;
 export const canRecord = () => !!(MIME && canvas && canvas.captureStream);
 export function initRecord(cv) { canvas = cv; }
 
@@ -95,8 +98,27 @@ function endSession() {
   if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }
 }
 
-// Called every frame: progress display and the stop at the chosen length.
+// Still image. A slow phone previews at a lower scale, so go to full size first and give the
+// trails a moment to build back; otherwise the frame just drawn is the one that is saved.
+export function takeStill() {
+  if (!canvas || stillWait) return;
+  if (G.scale < 1) { setOutputScale(1); stillWait = 20; } else stillWait = 1;
+}
+function grabStill() {
+  const w = canvas.width, h = canvas.height, label = G.dir + ' · ' + MODES[P.mode];
+  el.monitor.classList.remove('flash'); void el.monitor.offsetWidth; el.monitor.classList.add('flash');
+  canvas.toBlob(blob => {
+    if (!blob) { toast('The image could not be made on this device.'); return; }
+    resultCount++;
+    const name = `miroir-sonore-${stamp()}-${resultCount}.png`;
+    addResultCard(blob, name, `${w} × ${h} · PNG · ${(blob.size / 1048576).toFixed(1)} MB · ${label}`, false, 'image');
+    toast('Image ready. It is also under Export.', { label: 'Save', fn: () => saveBlob(blob, name).then(toast) });
+  }, 'image/png');
+}
+
+// Called every frame: the still that is due, the progress display and the stop at the chosen length.
 export function recordTick(now) {
+  if (stillWait && --stillWait === 0) grabStill();
   if (!clipActive || !recT0) { G.recT = -1; return; }
   const e = (now - recT0) / 1000;
   G.recT = e; G.recLen = recLen;   // the Journey arc follows the clip
@@ -111,11 +133,10 @@ function makeResult(parts, secs) {
   const type = (recorder && recorder.mimeType) || MIME || 'video/webm';
   const ext = type.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
   const blob = new Blob(parts, { type: type.split(';')[0] });
-  const d = new Date(), z = n => (n < 10 ? '0' : '') + n;
   resultCount++;
-  const name = `miroir-sonore-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${resultCount}.${ext}`;
+  const name = `miroir-sonore-${stamp()}-${resultCount}.${ext}`;
   const info = `${G.W} × ${G.H} · ${fmt(secs)} · ${(blob.size / 1048576).toFixed(1)} MB · ${clipLabel}`;
-  addResultCard(blob, name, info, resultCount === 1);
+  addResultCard(blob, name, info, ++clipCount === 1, 'video');
 }
 
 // Saving: inside claude.ai the page must use the downloads capability (plain downloads are blocked there).
@@ -130,8 +151,8 @@ export async function saveBlob(blob, name) {
       const c = err && err.code;
       return c === 'declined' ? 'Save cancelled.' :
         c === 'rate_limited' ? 'A save prompt is already open.' :
-        c === 'too_large' ? 'This clip is too large to save here. Try 720p or a shorter length.' :
-        c === 'rejected_extension' ? 'This video format cannot be saved here.' :
+        c === 'too_large' ? 'This file is too large to save here. Try 720p or a shorter length.' :
+        c === 'rejected_extension' ? 'This format cannot be saved here.' :
         'Saving is not available in this view.';
     }
   }
