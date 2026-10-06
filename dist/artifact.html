@@ -71,11 +71,12 @@ svg{display:block}
 .pbtn svg{width:18px;height:18px}
 .scrub{min-width:0}
 .times{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:-3px}
-.macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 18px}
-.macro{min-width:0}
-.mh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:-4px}
-.mh label{font-size:13.5px;font-weight:600}
-.mh output{font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.macros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 16px}
+.macro{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lab out" "rng rng";align-items:baseline}
+.macro label{grid-area:lab;font-size:13.5px;font-weight:600}
+.macro output{grid-area:out;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.macro input{grid-area:rng;margin-top:-4px}
+.pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
 .quick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .qbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px 6px 10px;font-size:13px;font-weight:600}
 .qbtn:hover{border-color:var(--dim)}
@@ -183,7 +184,10 @@ input[type=range]:focus-visible{outline-offset:4px}
   .pbtn{width:38px;height:38px}
   .pbtn svg{width:15px;height:15px}
   .macros{grid-template-columns:minmax(0,1fr);gap:0}
-  .mh label{font-size:12.5px}
+  .macro{grid-template-columns:3em minmax(0,1fr) 2.7em;grid-template-areas:"lab rng out";align-items:center;column-gap:6px}
+  .macro label{font-size:12.5px}
+  .macro output{text-align:right;font-size:9.5px}
+  .macro input{margin-top:0;height:26px}
   .quick{gap:6px}
   .qbtn,.switch{font-size:12px}
   .qbtn{padding:5px 9px 5px 8px}
@@ -213,7 +217,9 @@ body.immersive .monitor{position:absolute;left:50%;top:50%;transform:translate(-
 @supports (height:1dvh){ body.immersive .monitor{height:min(100dvh,calc(100vw / var(--arn)))} }
 body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.8) 38%);gap:10px;transition:opacity .25s}
 body.immersive .side > *{width:100%;max-width:640px;margin-inline:auto}
-body.immersive .macros{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+body.immersive .macros{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 14px}
+body.immersive .macro{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lab out" "rng rng";align-items:baseline}
+body.immersive .macro input{margin-top:-4px;height:30px}
 body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .mini-rec{display:flex;height:44px;font-size:15px}
@@ -222,7 +228,7 @@ body.immersive .tabs,body.immersive .meters,body.immersive #fsBtn,body.immersive
 body.immersive.ui-off .side,body.immersive.ui-off .exitfs,body.immersive.ui-off .lookbadge{opacity:0;pointer-events:none}
 body.immersive.ui-off{cursor:none}
 .mini button{flex:none;border:1px solid rgba(239,232,220,.25);background:rgba(20,21,31,.62);border-radius:999px;padding:5px 11px 5px 6px;font-size:12.5px;font-weight:500;color:var(--bone);display:inline-flex;gap:6px;align-items:center}
-#miniModes button{padding-left:11px}
+#miniModes button,#miniPump button{padding-left:11px}
 .mini button[aria-pressed="true"]{background:var(--bone);border-color:var(--bone);color:var(--ink)}
 .mini .sw{width:13px;height:13px}
 .exitfs{position:absolute;z-index:2;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(239,232,220,.35);background:var(--shade);color:var(--bone);align-items:center;justify-content:center;transition:opacity .25s}
@@ -280,6 +286,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
       </div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
       <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
+      <div class="mini" id="miniPump" role="group" aria-label="Pump style"></div>
       <button class="recbtn mini-rec" id="recMini" type="button" disabled><i></i><span id="recMiniLbl">Record 15s</span></button>
       <div class="leds" aria-hidden="true">
         <span class="led"><em id="lKick"></em>KICK</span>
@@ -335,6 +342,11 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
 
     <section class="sec" data-tab="look">
       <h2 class="lab">Look</h2>
+      <div class="pumpbox">
+        <div class="opt"><span>Pump</span><div class="seg sm" id="pumpStyle" role="group" aria-label="Pump style"></div></div>
+        <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
+        <p class="note" id="pumpNote"></p>
+      </div>
       <div class="modegrid" id="modes" role="group" aria-label="Mode"></div>
       <div class="fader" id="foldRow">
         <label for="segIn">Folds</label>
@@ -363,7 +375,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · S shuffle · A auto · F full screen · 1–7 modes</p>
+      <p class="keys">Space play · R record · S shuffle · A auto · P pump style · F full screen · 1–7 modes</p>
     </section>
   </aside>
 </div>
@@ -398,9 +410,12 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
   var pct = (v) => Math.round(v * 100) + "%";
   var x2 = (v) => v.toFixed(2);
   var MACROS = [
-    { k: "beat", label: "Beat", min: 0, max: 1.5, step: 0.01, fmt: pct, hint: "Strength of hits on kicks, snares and drops" },
+    { k: "beat", label: "Beat", min: 0, max: 1.5, step: 0.01, fmt: pct, hint: "Hits on kicks, snares and drops: glitch, color split, ripples, flashes" },
+    { k: "pump", label: "Pump", min: 0, max: 1.5, step: 0.01, fmt: pct, hint: "How much the kick pumps the picture, like sidechain in a mix" },
     { k: "flow", label: "Flow", min: 0, max: 1.5, step: 0.01, fmt: pct, hint: "How much the music drives continuous motion" }
   ];
+  var PUMP_STYLES = ["Off", "Duck", "Punch", "Breathe"];
+  var PUMP_LENGTHS = { "1/16": 0.25, "1/8": 0.5, "1/4": 1, "1/2": 2 };
   var FEEL = [
     { k: "punch", label: "Punch", min: 0, max: 1, step: 0.01, fmt: pct },
     { k: "glitch", label: "Glitch", min: 0, max: 1, step: 0.01, fmt: pct },
@@ -423,6 +438,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
   ];
   var KEYS = [
     "beat",
+    "pump",
     "flow",
     "punch",
     "glitch",
@@ -443,6 +459,7 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     mode: 1,
     seg: 8,
     beat: 0.8,
+    pump: 0.7,
     flow: 1,
     punch: 0.7,
     glitch: 0.35,
@@ -486,9 +503,12 @@ body.immersive .recbadge{left:50%;transform:translateX(-50%);top:calc(14px + env
     tiltPh: 0,
     poke: [0, 0, 9],
     // holo ripple: x, y, age in seconds
-    morph: 0
+    morph: 0,
     // 1 right after a Morph transition, decays to 0
+    pumpT: 9
+    // seconds since the last kick, for the pump envelope
   };
+  var PUMP = { style: "Punch", len: "1/8" };
   var A = {
     low: 0,
     mid: 0,
@@ -1361,6 +1381,24 @@ void main(){
     const dir = Math.random() < 0.5 ? -1 : 1;
     S.rotV += dir * V.punch * V.beat * 0.9 * (Math.abs(V.spin) + 0.15);
     S.poke = [rnd(-0.25, 0.25), rnd(-0.35, 0.35), 0];
+    S.pumpT = 0;
+  }
+  function pumpShape(dt, F) {
+    S.pumpT += dt;
+    const len = Math.max(0.06, BEAT.period * PUMP_LENGTHS[PUMP.len]);
+    const env = Math.pow(clamp2(1 - S.pumpT / len), 1.6);
+    const bass = clamp2(A.low * F);
+    const amt = V.pump;
+    switch (PUMP.style) {
+      case "Duck":
+        return { z: -0.13 * env * amt, b: -0.32 * env * amt, c: -0.08 * env * amt };
+      case "Punch":
+        return { z: (0.3 * env + 0.08 * bass) * amt, b: 0.22 * env * amt, c: 0.15 * env * amt };
+      case "Breathe":
+        return { z: 0.16 * bass * amt, b: 0.08 * bass * amt, c: 0.25 * bass * amt };
+      default:
+        return { z: 0, b: 0, c: 0 };
+    }
   }
   function reactSnare() {
     S.sliceSeed = Math.random() * 100;
@@ -1390,12 +1428,13 @@ void main(){
     U.hue = G.dir === "Original" ? V.color * 0.45 * Math.sin(S.hueT) + S.hueKick : 0;
     S.poke[2] += dt;
     S.tiltPh += dt * (0.12 + 0.5 * lv) * sl;
-    U.zoom = V.zoom * (1 + 0.18 * lo + 0.3 * k + 0.05 * sn * V.punch + 0.2 * drop);
+    const pm = pumpShape(dt, F);
+    U.zoom = V.zoom * (1 + pm.z + 0.05 * sn * V.punch + 0.2 * drop);
     U.warp = V.warp * (0.25 + 1.1 * mi) + 0.1 * k + (P.mode === HOLO ? 0.3 * lo * V.warp : 0);
     U.twist = V.warp * (0.9 * Math.sin(S.t * 0.27) + 2 * mi) + 0.6 * k;
     U.chroma = 0.3 + 5 * k + 3 * sn * V.glitch + 2 * hi + 3 * cut;
-    U.bright = 0.96 + 0.32 * k + 0.12 * lo + 0.55 * drop + 0.35 * cut;
-    U.contrast = 1.04 + 0.3 * lo;
+    U.bright = Math.max(0.3, 0.96 + pm.b + 0.55 * drop + 0.35 * cut);
+    U.contrast = 1.04 + pm.c;
     U.sat = 1 + 0.3 * hi + ((_a = { Ink: 0, Original: 0, Picture: 0.05 }[G.dir]) != null ? _a : 0.12);
     const trailBase = clamp2(V.trails * (1 - 0.55 * k - 0.5 * cut), 0, 0.97);
     U.trail = Math.max(Math.pow(trailBase, f60), Math.pow(0.94, f60) * S.morph);
@@ -1413,7 +1452,7 @@ void main(){
     U.jx = jr * Math.cos(S.jul);
     U.jy = jr * Math.sin(S.jul);
     U.grain = V.grain * (0.75 + 0.7 * ht + 0.3 * hi);
-    U.glow = V.glow * (0.6 + 0.9 * k + 0.4 * lo + 0.8 * drop);
+    U.glow = V.glow * (0.6 + 0.8 * drop) * (1 + Math.max(0, pm.b) * 3);
   }
 
   // src/ui.js
@@ -1469,6 +1508,10 @@ void main(){
       "bars",
       "trans",
       "autoNote",
+      "pumpStyle",
+      "pumpLen",
+      "pumpNote",
+      "miniPump",
       "modes",
       "foldRow",
       "segIn",
@@ -1505,6 +1548,11 @@ void main(){
       AUTO.trans = t;
       pressed(el.trans, t);
     }));
+    PUMP_STYLES.forEach((s) => {
+      addBtn(el.pumpStyle, s, s, () => setPump(s, PUMP.len));
+      addBtn(el.miniPump, s, s === "Off" ? "Pump off" : "Pump: " + s, () => setPump(s, PUMP.len));
+    });
+    Object.keys(PUMP_LENGTHS).forEach((l) => addBtn(el.pumpLen, l, l, () => setPump(PUMP.style, l)));
     MODES.forEach((name, i) => {
       addBtn(el.modes, i, name, () => setMode(i));
       addBtn(el.miniModes, i, name, () => setMode(i));
@@ -1625,7 +1673,7 @@ void main(){
       const row = document.createElement("div");
       const id = "f-" + d.k;
       row.className = kind === "macro" ? "macro" : "fader";
-      row.innerHTML = kind === "macro" ? `<div class="mh"><label for="${id}">${d.label}</label><output for="${id}"></output></div><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}">` : `<label for="${id}">${d.label}</label><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}"><output for="${id}"></output>`;
+      row.innerHTML = `<label for="${id}">${d.label}</label><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}"><output for="${id}"></output>`;
       if (d.hint) row.title = d.hint;
       const input = row.querySelector("input"), out = row.querySelector("output");
       input.addEventListener("input", () => {
@@ -1658,6 +1706,28 @@ void main(){
       setFill(f.input);
     }));
     el.lookBadge.textContent = G.dir + " \xB7 " + MODES[P.mode] + (AUTO.on ? " \xB7 Auto" : "");
+    syncPump();
+  }
+  var PUMP_NOTES = {
+    Off: "No pumping. The kick and bass no longer move the zoom or brightness; Beat and Flow still work.",
+    Duck: "Classic sidechain: on each kick the picture shrinks and dims, then swells back in time with the music.",
+    Punch: "On each kick the picture zooms in and flashes, then relaxes.",
+    Breathe: "The picture follows the bass smoothly, without a hard hit on the kick."
+  };
+  function setPump(style, len) {
+    PUMP.style = style;
+    PUMP.len = len;
+    syncPump();
+  }
+  function syncPump() {
+    pressed(el.pumpStyle, PUMP.style);
+    pressed(el.miniPump, PUMP.style);
+    pressed(el.pumpLen, PUMP.len);
+    const timed = PUMP.style === "Duck" || PUMP.style === "Punch";
+    Array.prototype.forEach.call(el.pumpLen.children, (b) => {
+      b.disabled = !timed;
+    });
+    el.pumpNote.textContent = PUMP_NOTES[PUMP.style] + (timed ? ` Each pump lasts ${PUMP.len} note.` : "");
   }
   function setAutoUI() {
     el.autoT.setAttribute("aria-pressed", String(AUTO.on));
@@ -1869,6 +1939,7 @@ void main(){
         if (!el.recBtn.disabled) H.toggleRecord();
       } else if (k === "s" || k === "S") shuffle();
       else if (k === "a" || k === "A") setAuto(!AUTO.on);
+      else if (k === "p" || k === "P") setPump(PUMP_STYLES[(PUMP_STYLES.indexOf(PUMP.style) + 1) % PUMP_STYLES.length], PUMP.len);
       else if (k === "f" || k === "F") setImmersive(!document.body.classList.contains("immersive"));
       else if (k === "Escape" && document.body.classList.contains("immersive")) setImmersive(false);
       else if (/^[1-7]$/.test(k)) setMode(parseInt(k, 10) - 1);
@@ -2385,6 +2456,7 @@ void main(){
     adaptQuality(dt, now, SESSION.active);
     requestAnimationFrame(frame);
   }
+  if (window.__MS_TEST__) window.__ms = { U, V, S, PUMP, BEAT };
   boot();
 })();
 </script>

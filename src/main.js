@@ -1,5 +1,5 @@
 // Boot and the frame loop. Order per frame: clock → analysis → Auto → mapping → render → HUD → recording.
-import { G, SESSION } from './state.js';
+import { G, SESSION, U, V, S, PUMP, BEAT } from './state.js';
 import { initRenderer, uploadImage, render } from './gl/renderer.js';
 import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
 import { makeSampleLoop } from './audio/sample-loop.js';
@@ -116,4 +116,6 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
+if (window.__MS_TEST__) window.__ms = { U, V, S, PUMP, BEAT };
 boot();

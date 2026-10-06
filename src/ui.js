@@ -1,6 +1,6 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
-import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS } from './config.js';
-import { P, G, A, V, BEAT, AUTO, OUT, SESSION } from './state.js';
+import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS } from './config.js';
+import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP } from './state.js';
 import { setDirection, setMode, shuffle, setAuto } from './auto.js';
 
 export const el = {};
@@ -14,7 +14,7 @@ export function initUI(handlers) {
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'recMini', 'recMiniLbl',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
-   'dirs', 'bars', 'trans', 'autoNote', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
+   'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
    'fmts', 'quals', 'lens', 'clips', 'safeT', 'safeWrap', 'recBtn', 'recLbl', 'recNote', 'results', 'spec', 'drop', 'toast'
   ].forEach(id => { el[id] = $(id); });
 
@@ -25,6 +25,11 @@ export function initUI(handlers) {
   });
   BARS.forEach(n => addBtn(el.bars, n, n + ' bars', () => { AUTO.bars = n; setAuto(true); }));
   TRANSITIONS.forEach(t => addBtn(el.trans, t, t, () => { AUTO.trans = t; pressed(el.trans, t); }));
+  PUMP_STYLES.forEach(s => {
+    addBtn(el.pumpStyle, s, s, () => setPump(s, PUMP.len));
+    addBtn(el.miniPump, s, s === 'Off' ? 'Pump off' : 'Pump: ' + s, () => setPump(s, PUMP.len));
+  });
+  Object.keys(PUMP_LENGTHS).forEach(l => addBtn(el.pumpLen, l, l, () => setPump(PUMP.style, l)));
   MODES.forEach((name, i) => {
     addBtn(el.modes, i, name, () => setMode(i));
     addBtn(el.miniModes, i, name, () => setMode(i));
@@ -107,9 +112,7 @@ function buildFaders(container, defs, kind) {
     const row = document.createElement('div');
     const id = 'f-' + d.k;
     row.className = kind === 'macro' ? 'macro' : 'fader';
-    row.innerHTML = kind === 'macro'
-      ? `<div class="mh"><label for="${id}">${d.label}</label><output for="${id}"></output></div><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}">`
-      : `<label for="${id}">${d.label}</label><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}"><output for="${id}"></output>`;
+    row.innerHTML = `<label for="${id}">${d.label}</label><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}"><output for="${id}"></output>`;
     if (d.hint) row.title = d.hint;
     const input = row.querySelector('input'), out = row.querySelector('output');
     input.addEventListener('input', () => {
@@ -132,6 +135,24 @@ export function syncUI() {
   el.segIn.value = P.seg; el.segOut.textContent = P.seg; setFill(el.segIn);
   Object.keys(faders).forEach(k => faders[k].forEach(f => { f.input.value = P[k]; f.out.textContent = f.d.fmt(P[k]); setFill(f.input); }));
   el.lookBadge.textContent = G.dir + ' · ' + MODES[P.mode] + (AUTO.on ? ' · Auto' : '');
+  syncPump();
+}
+
+const PUMP_NOTES = {
+  Off: 'No pumping. The kick and bass no longer move the zoom or brightness; Beat and Flow still work.',
+  Duck: 'Classic sidechain: on each kick the picture shrinks and dims, then swells back in time with the music.',
+  Punch: 'On each kick the picture zooms in and flashes, then relaxes.',
+  Breathe: 'The picture follows the bass smoothly, without a hard hit on the kick.'
+};
+export function setPump(style, len) {
+  PUMP.style = style; PUMP.len = len;
+  syncPump();
+}
+function syncPump() {
+  pressed(el.pumpStyle, PUMP.style); pressed(el.miniPump, PUMP.style); pressed(el.pumpLen, PUMP.len);
+  const timed = PUMP.style === 'Duck' || PUMP.style === 'Punch';
+  Array.prototype.forEach.call(el.pumpLen.children, b => { b.disabled = !timed; });
+  el.pumpNote.textContent = PUMP_NOTES[PUMP.style] + (timed ? ` Each pump lasts ${PUMP.len} note.` : '');
 }
 
 export function setAutoUI() {
@@ -295,6 +316,7 @@ function initKeys() {
     else if (k === 'r' || k === 'R') { if (!el.recBtn.disabled) H.toggleRecord(); }
     else if (k === 's' || k === 'S') shuffle();
     else if (k === 'a' || k === 'A') setAuto(!AUTO.on);
+    else if (k === 'p' || k === 'P') setPump(PUMP_STYLES[(PUMP_STYLES.indexOf(PUMP.style) + 1) % PUMP_STYLES.length], PUMP.len);
     else if (k === 'f' || k === 'F') setImmersive(!document.body.classList.contains('immersive'));
     else if (k === 'Escape' && document.body.classList.contains('immersive')) setImmersive(false);
     else if (/^[1-7]$/.test(k)) setMode(parseInt(k, 10) - 1);

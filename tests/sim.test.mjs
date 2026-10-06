@@ -58,13 +58,14 @@ w.OfflineAudioContext = class { constructor() { return new Proxy(this, { get: (t
   ? () => Promise.resolve({ numberOfChannels: 2, sampleRate: 44100, length: 100, getChannelData: () => new Float32Array(100) })
   : (p in t ? t[p] : any()), set: (t, p, v) => { t[p] = v; return true; } }); } };
 
+w.__MS_TEST__ = true;
 w.eval(script);
 const $ = id => w.document.getElementById(id);
 const click = el => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
 const tick = () => new Promise(r => _st(r, 0));
 const lightOn = { k: 0, s: 0, h: 0, d: 0 }, prev = {}, counts = { k: 0, s: 0, h: 0, d: 0 };
 let lastLook = '', lookChanges = 0;
-async function run(seconds) {
+async function run(seconds, onFrame) {
   for (let i = 0, n = Math.round(seconds * 60); i < n; i++) {
     simNow += 1000 / 60; const a = audioEl[0];
     if (!a.paused) { a.currentTime += 1 / 60; if (a.currentTime >= a.duration) { if (a.loop) a.currentTime -= a.duration; else { a.currentTime = a.duration; a.pause(); a.dispatchEvent(new w.Event('ended')); } } }
@@ -72,6 +73,7 @@ async function run(seconds) {
     for (const [id, k, th] of [['lKick', 'k', .8], ['lSnare', 's', .8], ['lHat', 'h', .6], ['lDrop', 'd', .8]]) {
       const o = parseFloat($(id).style.opacity); if (o > th && !(prev[k] > th)) counts[k]++; prev[k] = o; }
     const L = $('lookBadge').textContent; if (L !== lastLook) { if (lastLook) lookChanges++; lastLook = L; }
+    if (onFrame) onFrame();
     if (i % 4 === 0) await tick();
   }
 }
@@ -99,6 +101,33 @@ check($('autoT').getAttribute('aria-pressed') === 'true', 'Beat fader keeps Auto
 await run(1);
 const punch = $('f-punch'); punch.value = '0.3'; punch.dispatchEvent(new w.Event('input'));
 check($('autoT').getAttribute('aria-pressed') === 'false', 'a Look fader turns Auto off');
+// Pump: with Beat at 0 and Auto off, zoom only moves through the pump
+beat.value = '0'; beat.dispatchEvent(new w.Event('input'));
+await run(1.5);
+async function zoomRange(style) {
+  click(Array.prototype.find.call($('pumpStyle').children, b => b.dataset.v === style));
+  audioEl[0].currentTime = .1; await run(.6);
+  let mn = 1e9, mx = -1e9;
+  await run(3, () => { const r = w.__ms.U.zoom / w.__ms.V.zoom; mn = Math.min(mn, r); mx = Math.max(mx, r); });
+  return { mn, mx };
+}
+const off = await zoomRange('Off');
+check(off.mx - off.mn < .01, `Pump Off: picture does not pump (zoom range ${(off.mx - off.mn).toFixed(3)})`);
+check($('pumpLen').children[0].disabled, 'Pump length is disabled when Pump is off');
+const duck = await zoomRange('Duck');
+check(duck.mn < .95 && duck.mx < 1.005, `Pump Duck: shrinks on kicks and swells back (min ${duck.mn.toFixed(3)}, max ${duck.mx.toFixed(3)})`);
+const punch2 = await zoomRange('Punch');
+check(punch2.mx > 1.12, `Pump Punch: zooms in on kicks (max ${punch2.mx.toFixed(3)})`);
+const breathe = await zoomRange('Breathe');
+check(breathe.mx - breathe.mn > .02, `Pump Breathe: follows the bass (range ${(breathe.mx - breathe.mn).toFixed(3)})`);
+click(Array.prototype.find.call($('pumpLen').children, b => b.dataset.v === '1/4'));
+const quarter = await zoomRange('Duck');
+check(quarter.mn < .95, `Pump length 1/4 works (min ${quarter.mn.toFixed(3)})`);
+const pumpF = $('f-pump'); pumpF.value = '0'; pumpF.dispatchEvent(new w.Event('input')); await run(1);
+const zeroAmt = await zoomRange('Punch');
+check(zeroAmt.mx - zeroAmt.mn < .01, `Pump amount 0 stops pumping (range ${(zeroAmt.mx - zeroAmt.mn).toFixed(3)})`);
+pumpF.value = '0.7'; pumpF.dispatchEvent(new w.Event('input'));
+click(Array.prototype.find.call($('pumpLen').children, b => b.dataset.v === '1/8'));
 beat.value = '0.8'; beat.dispatchEvent(new w.Event('input'));
 
 for (const b of $('dirs').children) { click(b); await run(.2); }

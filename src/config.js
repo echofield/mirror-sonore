@@ -28,9 +28,15 @@ const x2 = v => v.toFixed(2);
 
 // Macros are the user's live intensity controls. Auto never changes them.
 export const MACROS = [
-  { k: 'beat', label: 'Beat', min: 0, max: 1.5, step: .01, fmt: pct, hint: 'Strength of hits on kicks, snares and drops' },
+  { k: 'beat', label: 'Beat', min: 0, max: 1.5, step: .01, fmt: pct, hint: 'Hits on kicks, snares and drops: glitch, color split, ripples, flashes' },
+  { k: 'pump', label: 'Pump', min: 0, max: 1.5, step: .01, fmt: pct, hint: 'How much the kick pumps the picture, like sidechain in a mix' },
   { k: 'flow', label: 'Flow', min: 0, max: 1.5, step: .01, fmt: pct, hint: 'How much the music drives continuous motion' }
 ];
+// Pump: the kick "sidechains" the picture. The envelope is 1 on each kick and recovers over a
+// tempo-synced length (in beats). Duck = shrink and darken then swell back (classic sidechain),
+// Punch = zoom in and brighten, Breathe = follow the bass smoothly, Off = no pumping at all.
+export const PUMP_STYLES = ['Off', 'Duck', 'Punch', 'Breathe'];
+export const PUMP_LENGTHS = { '1/16': .25, '1/8': .5, '1/4': 1, '1/2': 2 };
 // The look's character. Auto and Shuffle rewrite these.
 export const FEEL = [
   { k: 'punch',  label: 'Punch',  min: 0,  max: 1,   step: .01, fmt: pct },
@@ -55,12 +61,12 @@ export const FOIL = [
 ];
 
 // Every continuous parameter. V (live values) eases toward P (control values) for these keys.
-export const KEYS = ['beat', 'flow', 'punch', 'glitch', 'warp', 'trails', 'spin', 'zoom',
+export const KEYS = ['beat', 'pump', 'flow', 'punch', 'glitch', 'warp', 'trails', 'spin', 'zoom',
   'palMix', 'color', 'grain', 'glow', 'holo', 'bands', 'sparkle', 'bump'];
 
 export const DEFAULTS = {
   mode: 1, seg: 8,
-  beat: .8, flow: 1,
+  beat: .8, pump: .7, flow: 1,
   punch: .7, glitch: .35, warp: .25, trails: .45, spin: .22, zoom: .95,
   palMix: .75, color: .35, grain: .28, glow: .35,
   holo: .84, bands: 1.1, sparkle: .73, bump: .6

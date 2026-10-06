@@ -1,7 +1,11 @@
 // Sound → picture. Runs once per frame after analysis and turns envelopes and hits into uniforms.
-// Two user macros scale everything here: V.beat (hits: kick/snare/drop/cut) and V.flow (continuous motion).
-import { A, S, V, P, U, G } from './state.js';
-import { KEYS, HOLO } from './config.js';
+// Three user macros scale everything here:
+//   V.beat — hits (glitch, color split, ripples, spin jolts, drop flash)
+//   V.pump — the kick "sidechaining" the picture (zoom, brightness, contrast), shaped by PUMP.style/len
+//   V.flow — continuous motion driven by the music
+// Pump is the only place the kick or bass moves zoom and brightness, so Pump Off means no pumping.
+import { A, S, V, P, U, G, BEAT, PUMP } from './state.js';
+import { KEYS, HOLO, PUMP_LENGTHS } from './config.js';
 
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -10,6 +14,22 @@ export function reactKick() {
   const dir = Math.random() < .5 ? -1 : 1;
   S.rotV += dir * V.punch * V.beat * .9 * (Math.abs(V.spin) + .15);
   S.poke = [rnd(-.25, .25), rnd(-.35, .35), 0];
+  S.pumpT = 0;
+}
+
+// Pump envelope and its effect on zoom / brightness / contrast (multipliers and offsets).
+function pumpShape(dt, F) {
+  S.pumpT += dt;
+  const len = Math.max(.06, BEAT.period * PUMP_LENGTHS[PUMP.len]);
+  const env = Math.pow(clamp(1 - S.pumpT / len), 1.6);      // 1 on the kick → 0 after `len`
+  const bass = clamp(A.low * F);
+  const amt = V.pump;
+  switch (PUMP.style) {
+    case 'Duck':    return { z: -.13 * env * amt, b: -.32 * env * amt, c: -.08 * env * amt };
+    case 'Punch':   return { z: (.3 * env + .08 * bass) * amt, b: .22 * env * amt, c: .15 * env * amt };
+    case 'Breathe': return { z: .16 * bass * amt, b: .08 * bass * amt, c: .25 * bass * amt };
+    default:        return { z: 0, b: 0, c: 0 };
+  }
 }
 export function reactSnare() {
   S.sliceSeed = Math.random() * 100;
@@ -43,12 +63,13 @@ export function step(dt) {
   S.poke[2] += dt;
   S.tiltPh += dt * (.12 + .5 * lv) * sl;
 
-  U.zoom = V.zoom * (1 + .18 * lo + .3 * k + .05 * sn * V.punch + .2 * drop);
+  const pm = pumpShape(dt, F);
+  U.zoom = V.zoom * (1 + pm.z + .05 * sn * V.punch + .2 * drop);
   U.warp = V.warp * (.25 + 1.1 * mi) + .1 * k + (P.mode === HOLO ? .3 * lo * V.warp : 0);
   U.twist = V.warp * (.9 * Math.sin(S.t * .27) + 2 * mi) + .6 * k;
   U.chroma = .3 + 5 * k + 3 * sn * V.glitch + 2 * hi + 3 * cut;
-  U.bright = .96 + .32 * k + .12 * lo + .55 * drop + .35 * cut;
-  U.contrast = 1.04 + .3 * lo;
+  U.bright = Math.max(.3, .96 + pm.b + .55 * drop + .35 * cut);
+  U.contrast = 1.04 + pm.c;
   U.sat = 1 + .3 * hi + ({ Ink: 0, Original: 0, Picture: .05 }[G.dir] ?? .12);
   // Trails; a Morph transition temporarily holds the old frame so looks dissolve into each other.
   const trailBase = clamp(V.trails * (1 - .55 * k - .5 * cut), 0, .97);
@@ -64,5 +85,5 @@ export function step(dt) {
   const jr = .7885 + .012 * lo + .018 * k;          // Julia constant orbits the Mandelbrot edge
   U.jx = jr * Math.cos(S.jul); U.jy = jr * Math.sin(S.jul);
   U.grain = V.grain * (.75 + .7 * ht + .3 * hi);
-  U.glow = V.glow * (.6 + .9 * k + .4 * lo + .8 * drop);
+  U.glow = V.glow * (.6 + .8 * drop) * (1 + Math.max(0, pm.b) * 3);   // glow pulses only with Punch/Breathe pumping
 }

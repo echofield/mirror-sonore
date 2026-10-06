@@ -60,6 +60,7 @@
       </div>
       <div class="mini" id="miniDirs" role="group" aria-label="Direction"></div>
       <div class="mini" id="miniModes" role="group" aria-label="Mode"></div>
+      <div class="mini" id="miniPump" role="group" aria-label="Pump style"></div>
       <button class="recbtn mini-rec" id="recMini" type="button" disabled><i></i><span id="recMiniLbl">Record 15s</span></button>
       <div class="leds" aria-hidden="true">
         <span class="led"><em id="lKick"></em>KICK</span>
@@ -115,6 +116,11 @@
 
     <section class="sec" data-tab="look">
       <h2 class="lab">Look</h2>
+      <div class="pumpbox">
+        <div class="opt"><span>Pump</span><div class="seg sm" id="pumpStyle" role="group" aria-label="Pump style"></div></div>
+        <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
+        <p class="note" id="pumpNote"></p>
+      </div>
       <div class="modegrid" id="modes" role="group" aria-label="Mode"></div>
       <div class="fader" id="foldRow">
         <label for="segIn">Folds</label>
@@ -143,7 +149,7 @@
       <button class="recbtn" id="recBtn" type="button" disabled><i></i><span id="recLbl">Record 15s</span></button>
       <p class="note" id="recNote">Recording starts from the current position and captures picture and sound together. With 3 or 5 clips, each one replays the same section with a new look. Keep this screen open while it records.</p>
       <div class="results" id="results"></div>
-      <p class="keys">Space play · R record · S shuffle · A auto · F full screen · 1–7 modes</p>
+      <p class="keys">Space play · R record · S shuffle · A auto · P pump style · F full screen · 1–7 modes</p>
     </section>
   </aside>
 </div>

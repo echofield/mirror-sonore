@@ -46,7 +46,8 @@ Frame order (in `src/main.js`): clock → `analyse` → `autoTick` → `step` �
 - `G`: scalars (clock, direction, palette, output size, preview scale).
 
 ### Rules that matter
-- **Beat and Flow are the user's.** `V.beat` scales every hit effect; `V.flow` scales continuous audio motion. Auto and Shuffle must never change them. Moving a Look fader (punch, glitch, warp, trails, spin, zoom, folds, mode) turns Auto off. Color/texture faders and macros do not.
+- **Beat, Pump and Flow are the user's.** `V.beat` scales hit effects (glitch, color split, ripples, jolts, drop flash). `V.pump` and `PUMP.style`/`PUMP.len` control the kick "sidechaining" the picture: Off, Duck, Punch or Breathe, with a length in notes synced to the detected tempo. `V.flow` scales continuous audio motion. Auto and Shuffle must never change any of them.
+- **Pump is the only path from kick/bass to zoom, brightness, contrast and glow** (`pumpShape` in `map.js`). Don't add kick or bass terms to those uniforms elsewhere, or Pump Off stops meaning "no pumping". Moving a Look fader (punch, glitch, warp, trails, spin, zoom, folds, mode) turns Auto off. Color/texture faders and macros do not.
 - **Mode ids are fixed**: 0 Mirror, 1 Kaleido, 2 Tunnel, 3 Liquid, 4 Holo, 5 Fractal, 6 Infinite. They are referenced in `config.js` (`DIRS[*].modes`, `FOLD_MODES`, `HOLO`), `shaders.js` (`uMode` branches) and `auto.js` (per-mode tweaks).
 - **WebGL1 / GLSL ES 1.0 only** (older iPhones). Loops need constant bounds. `smoothstep(a, b, x)` needs `a < b`. Avoid `texture2D` inside non-uniform control flow: compute the coordinate in the loop and sample after it (see the Fractal branch).
 - Kaleido and Mirror fold **before** the warp; otherwise the symmetry breaks.

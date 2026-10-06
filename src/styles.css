@@ -66,11 +66,12 @@ svg{display:block}
 .pbtn svg{width:18px;height:18px}
 .scrub{min-width:0}
 .times{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:-3px}
-.macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 18px}
-.macro{min-width:0}
-.mh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:-4px}
-.mh label{font-size:13.5px;font-weight:600}
-.mh output{font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.macros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 16px}
+.macro{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lab out" "rng rng";align-items:baseline}
+.macro label{grid-area:lab;font-size:13.5px;font-weight:600}
+.macro output{grid-area:out;font-family:var(--f-mono);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.macro input{grid-area:rng;margin-top:-4px}
+.pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
 .quick{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .qbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px 6px 10px;font-size:13px;font-weight:600}
 .qbtn:hover{border-color:var(--dim)}
@@ -178,7 +179,10 @@ input[type=range]:focus-visible{outline-offset:4px}
   .pbtn{width:38px;height:38px}
   .pbtn svg{width:15px;height:15px}
   .macros{grid-template-columns:minmax(0,1fr);gap:0}
-  .mh label{font-size:12.5px}
+  .macro{grid-template-columns:3em minmax(0,1fr) 2.7em;grid-template-areas:"lab rng out";align-items:center;column-gap:6px}
+  .macro label{font-size:12.5px}
+  .macro output{text-align:right;font-size:9.5px}
+  .macro input{margin-top:0;height:26px}
   .quick{gap:6px}
   .qbtn,.switch{font-size:12px}
   .qbtn{padding:5px 9px 5px 8px}
@@ -208,7 +212,9 @@ body.immersive .monitor{position:absolute;left:50%;top:50%;transform:translate(-
 @supports (height:1dvh){ body.immersive .monitor{height:min(100dvh,calc(100vw / var(--arn)))} }
 body.immersive .side{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none;padding:40px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.8) 38%);gap:10px;transition:opacity .25s}
 body.immersive .side > *{width:100%;max-width:640px;margin-inline:auto}
-body.immersive .macros{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+body.immersive .macros{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 14px}
+body.immersive .macro{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"lab out" "rng rng";align-items:baseline}
+body.immersive .macro input{margin-top:-4px;height:30px}
 body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .mini-rec{display:flex;height:44px;font-size:15px}
@@ -217,7 +223,7 @@ body.immersive .tabs,body.immersive .meters,body.immersive #fsBtn,body.immersive
 body.immersive.ui-off .side,body.immersive.ui-off .exitfs,body.immersive.ui-off .lookbadge{opacity:0;pointer-events:none}
 body.immersive.ui-off{cursor:none}
 .mini button{flex:none;border:1px solid rgba(239,232,220,.25);background:rgba(20,21,31,.62);border-radius:999px;padding:5px 11px 5px 6px;font-size:12.5px;font-weight:500;color:var(--bone);display:inline-flex;gap:6px;align-items:center}
-#miniModes button{padding-left:11px}
+#miniModes button,#miniPump button{padding-left:11px}
 .mini button[aria-pressed="true"]{background:var(--bone);border-color:var(--bone);color:var(--ink)}
 .mini .sw{width:13px;height:13px}
 .exitfs{position:absolute;z-index:2;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(239,232,220,.35);background:var(--shade);color:var(--bone);align-items:center;justify-content:center;transition:opacity .25s}

@@ -5,11 +5,11 @@ Drop an image and a sound. The picture folds, warps and hits with the music. Rec
 - **Modes:** Mirror, Kaleido, Tunnel, Liquid, Holo (iridescent foil), Fractal (Julia set), Infinite (endless zoom).
 - **Directions:** Picture (colors taken from your image), Original (untouched), Neon, Holo, Gold, Ink, Dream, Ember.
 - **Auto:** changes the look on a kick every 4, 8 or 16 bars, and on every drop, with a Morph dissolve or a hard Cut.
-- **Beat and Flow:** your two live intensity controls. Beat sets the strength of the hits (kick, snare, drop); Flow sets the continuous motion.
+- **Beat, Pump and Flow:** your live intensity controls. Beat sets the hits (glitch, color split, flashes). Pump sets how much the kick sidechains the picture: Off, Duck, Punch or Breathe, with a length synced to the tempo. Flow sets the continuous motion.
 - **Export:** 9:16, 1:1 or 4:5, in 720p or 1080p, at 15s, 30s, 60s or full track. Record 1, 3 or 5 variations of the same section in one go.
 - Phone layout keeps the preview pinned while you edit. Full screen has floating controls.
 
-Keys: Space play · R record · S shuffle · A auto · F full screen · 1–7 modes.
+Keys: Space play · R record · S shuffle · A auto · P pump style · F full screen · 1–7 modes.
 
 ## Run it
 

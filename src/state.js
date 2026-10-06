@@ -13,8 +13,12 @@ export const S = {
   palPhase: 0, palTarget: 0,
   seed: Math.random() * 100, sliceSeed: 0, tiltPh: 0,
   poke: [0, 0, 9],   // holo ripple: x, y, age in seconds
-  morph: 0           // 1 right after a Morph transition, decays to 0
+  morph: 0,          // 1 right after a Morph transition, decays to 0
+  pumpT: 9           // seconds since the last kick, for the pump envelope
 };
+
+// Pump style and length are the user's, like Beat/Pump/Flow: Auto never changes them.
+export const PUMP = { style: 'Punch', len: '1/8' };
 
 // Audio analysis results: envelopes (low/mid/high/lvl) and decaying hit impulses.
 export const A = {
