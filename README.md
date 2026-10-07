@@ -28,6 +28,7 @@ npm run build      # dist/index.html: one self-contained file
 
 The build is a single static file, so any static host works.
 
+- **Cloudflare Pages (where it is live):** https://miroir-sonore.pages.dev, project `miroir-sonore`, production branch `main`. Run `npm test`, then `npx wrangler pages deploy dist --project-name miroir-sonore --branch main --commit-hash <the commit>`. Always pass the project name and the branch.
 - **Vercel:** `npx vercel` in this folder; `vercel.json` already sets the build. Or import the repo in the Vercel dashboard.
 - **Anywhere else:** upload `dist/index.html`.
 

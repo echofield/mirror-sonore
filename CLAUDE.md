@@ -74,6 +74,10 @@ Six substance-named art presets (LSD, Psilocybin, DMT, Mescaline, Ayahuasca, Ket
 
 Each trip is also registered as a hidden entry in `DIRS`, so its palette and modes flow through the normal direction code; hidden entries don't get Direction chips. Picking a Direction while a trip is on recolors it and keeps the trip layer. Trip "None" turns the layer off.
 
+### Where it is live
+- Public: https://miroir-sonore.pages.dev (Cloudflare Pages, direct upload, project `miroir-sonore`, production branch `main`). A push to GitHub does not deploy; the site changes only when someone runs `wrangler pages deploy dist --project-name miroir-sonore --branch main --commit-hash <sha>` from a clean tree after `npm test`. Deploy on the owner's word.
+- `dist/artifact.html` goes up with it and is reachable at `/artifact`; it is the same page as a fragment and holds nothing private.
+
 ### Publishing as a claude.ai Artifact
 `dist/artifact.html` is a fragment: no `<html>/<head>/<body>`, because the Artifact host adds its own skeleton. Inside an Artifact:
 - Only Google Fonts may load from outside. Scripts can come only from the CDN allowlist, so keep everything bundled.
