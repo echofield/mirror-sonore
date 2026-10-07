@@ -36,9 +36,9 @@ const img = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, img);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, gl.UNSIGNED_BYTE, data); gl.generateMipmap(gl.TEXTURE_2D);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 const wave = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, wave);
-const wd = new Uint8Array(128 * 4);
-for (let i = 0; i < 128; i++) { wd[i * 4] = 255 * Math.max(0, 1 - Math.abs(i / 127 - .5) * 2.4); wd[i * 4 + 1] = 255 * Math.exp(-Math.pow((i - 40) / 22, 2)); wd[i * 4 + 3] = 255; }
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, wd);
+const wd = new Uint8Array(256 * 4);
+for (let i = 0; i < 256; i++) { wd[i * 4 + 1] = 255 * (.12 + .88 * Math.abs(Math.sin(i * .37)) * (.35 + .65 * Math.abs(Math.sin(i * .06)))); wd[i * 4 + 3] = 255; }
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, wd);
 for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
 function target() {
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
@@ -79,7 +79,7 @@ rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
     const U = { uAspect: .8, uT: 1 + f * .05, uMode: mode, uSeg: 6, uZoom: 1, uRot: .4, uWarp: mode === 4 ? .5 : .25, uTwist: .3, uTrail: .3,
       uHue: 0, uChroma: 1.2, uBright: 1, uContrast: 1.1, uSat: 1.1, uTunZ: .7, uFb: 1.004, uFbRot: .001,
       uPalMix: D.mix, uPalPhase: .1, uSlice: 0, uSliceSeed: 12.3, uHolo: .84, uBands: 1.1, uSparkle: .9, uBump: .6, uPokeAmp: .9,
-      uWaveAmp: .6, uWaveT: .2, uWaveX: .05,
+      uWaveAmp: .6, uWaveT: .4, uWaveN: 40, uWaveBehind: .12,
       uLattice: trip ? .6 : 0, uLatScale: 11, uLatWarp: mode % 2 ? 1 : 0, uEcho: trip ? .3 : 0, uBreath: trip ? .5 : 0 };
     for (const k in U) f1(k, U[k]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

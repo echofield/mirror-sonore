@@ -300,6 +300,7 @@ body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;p
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .acts{position:static;padding:0;border:0;background:none}
 body.immersive .exitfs{display:grid}
+body.immersive .pad{display:none}
 body.immersive .tabs,body.immersive .meters,body.immersive .leds,body.immersive #fsBtn{display:none}
 body.immersive #latchT{display:inline-flex}
 body.immersive #shuffle{width:auto;padding:0 12px 0 10px}
@@ -466,6 +467,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
         <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
         <p class="note" id="pumpNote"></p>
       </div>
+      <div class="faders" id="wavefx" hidden></div>
       <div class="faders" id="feel"></div>
       <div class="handbox autorow">
         <button class="switch" id="latchT2" type="button" aria-pressed="false"><i></i>Latch</button>
@@ -510,7 +512,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
   var VHS = 8;
   var MARKED_MODES = [7];
   var HAND_MODES = {
-    7: { warp: 0.55, spin: 0.22, zoom: 1, trails: 0.4, seg: 6 },
+    7: { warp: 0.55, spin: 0.22, zoom: 1, trails: 0.35, seg: 8 },
     8: { warp: 0.12, spin: 0, zoom: 1.05, trails: 0.3 }
   };
   var DIRS = {
@@ -639,6 +641,10 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     { k: "sparkle", label: "Sparkle", min: 0, max: 1, step: 0.01, fmt: x2 },
     { k: "bump", label: "Scratches", min: 0, max: 1, step: 0.01, fmt: x2 }
   ];
+  var WAVEFX = [
+    { k: "behind", label: "Behind", min: 0, max: 0.8, step: 0.01, fmt: pct }
+  ];
+  var WAVE_LABELS = { warp: "Height", spin: "Speed" };
   var TRIPFX = [
     { k: "lattice", label: "Geometry", min: 0, max: 1, step: 0.01, fmt: pct },
     { k: "latScale", label: "Density", min: 4, max: 24, step: 0.1, fmt: (v) => v.toFixed(1) },
@@ -661,6 +667,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     "grain",
     "glow",
     "tape",
+    "behind",
     "holo",
     "bands",
     "sparkle",
@@ -688,6 +695,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     grain: 0.28,
     glow: 0.35,
     tape: 0,
+    behind: 0.1,
     holo: 0.84,
     bands: 1.1,
     sparkle: 0.73,
@@ -729,14 +737,12 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     // 1 right after a Morph transition, decays to 0
     pumpT: 9,
     // seconds since the last kick, for the pump envelope
-    waveT: 0,
-    waveX: 0,
     waveAcc: 0,
-    // Wave mode: travel of the passing wave, sideways slide, history scroll remainder
+    // Wave mode: how far the bar being born at the left edge has come out (0 to 1)
     echoT: 0
     // seconds since the last tracer capture
   };
-  var WAVE_N = 128;
+  var WAVE_N = 256;
   var WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N * 4) };
   var HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0, zoom: 0, warp: 0, trails: 0 }, latch: false, active: false };
   var PUMP = { style: "Punch", len: "1/8" };
@@ -755,8 +761,9 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     lastDrop: -99,
     playT: 0,
     pk: [0.2, 0.2, 0.2, 0.2],
-    spec: new Float32Array(48)
-    // smoothed spectrum, 40 Hz → 12 kHz in log-spaced bands (Wave mode)
+    wave: 0,
+    wpk: 0.1
+    // the sound's own level (RMS of the waveform), shaped for the Wave mode, and its running peak
   };
   var BEAT = { iois: [], last: -9, period: 0.5, bpm: 0 };
   var AUTO = { on: true, bars: 4, armed: false, armedAt: 0, phraseStart: 0, trans: "Morph" };
@@ -920,7 +927,7 @@ uniform sampler2D uImg; uniform sampler2D uPrev; uniform sampler2D uWave;
 uniform vec2 uRes; uniform vec2 uDrift; uniform vec2 uTilt; uniform vec2 uJulia;
 uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform vec3 uBg; uniform vec3 uPoke;
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
-uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveX;
+uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveN, uWaveBehind;
 uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -1029,6 +1036,7 @@ void main(){
   } else {
     // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite, Wave, VHS ----
     vec2 q;
+    float wm = 1.0; float wtail = 0.0;      // Wave: inside a bar (0 to 1), and how far along the train (0 = just born)
     if(uMode > 0.5 && uMode < 1.5){        // Kaleido: fold before the warp so symmetry holds
       float r = length(p); float a = atan(p.y, p.x);
       float seg = 6.2831853/uSeg;
@@ -1050,11 +1058,18 @@ void main(){
       q = p + w2*uWarp*1.4;
     } else if(uMode > 7.5){                // VHS: the picture played straight, held by hand; the tape is in the post pass
       q = p + 0.012*vec2(sin(uT*0.7), cos(uT*0.53));
-    } else if(uMode > 6.5){                // Wave: the picture stays in place and the music runs through it
-      float x = fc.x/uRes.x;
-      vec4 wv = texture2D(uWave, vec2(x, 0.5));   // r: spectrum standing in place, g: level history crossing left to right
-      float trav = wv.g*sin((x - uWaveT)*3.14159265*uSeg);
-      q = vec2(p.x - uWaveX, p.y/(1.0 + 1.8*uWaveAmp*wv.r) - 0.22*uWaveAmp*trav);
+    } else if(uMode > 6.5){                // Wave: the song's level as a train of bars crossing left to right, cut out of the picture
+      q = p;
+      float bx = fc.x/uRes.x*uWaveN - uWaveT;         // uWaveT: how far the bar being born at the left edge has come out
+      float lvl = texture2D(uWave, vec2((floor(bx) + 1.5)/256.0, 0.5)).g;
+      float pitch = uRes.x/(uRes.y*uWaveN);           // one bar and its gap, in screen heights
+      float hw = 0.36*pitch;
+      float hh = max(0.5*uWaveAmp*lvl, 0.0035);       // silence still draws a thin line
+      float rr = min(hw, hh);
+      vec2 dd = abs(vec2((fract(bx) - 0.5)*pitch, p0.y)) - vec2(hw - rr, hh - rr);
+      float sd = length(max(dd, 0.0)) + min(max(dd.x, dd.y), 0.0) - rr;
+      wm = 1.0 - smoothstep(-1.2/uRes.y, 1.2/uRes.y, sd);
+      wtail = fc.x/uRes.x;
     } else {                               // Infinite: log-polar zoom, mirrored per octave, with folds and spiral
       float r = max(length(p), 0.0001); float lr = log(r); float a = atan(p.y, p.x);
       float seg = 6.2831853/uSeg;
@@ -1071,6 +1086,7 @@ void main(){
     col.g = texture2D(uImg, mr(uv)).g;
     col.b = texture2D(uImg, mr(uv - dir)).b;
     col = gradeMap(col);
+    if(uMode > 6.5 && uMode < 7.5) col = mix(mix(uBg, col, uWaveBehind), col*(1.0 - 0.35*wtail), wm);
   }
 
   col = hueRot(col, uHue);
@@ -1415,8 +1431,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     u1(MAIN, "uBump", V.bump);
     u1(MAIN, "uPokeAmp", U.pokeAmp);
     u1(MAIN, "uWaveAmp", U.waveAmp);
-    u1(MAIN, "uWaveT", S.waveT);
-    u1(MAIN, "uWaveX", S.waveX);
+    u1(MAIN, "uWaveT", U.waveT);
+    u1(MAIN, "uWaveN", U.waveN);
+    u1(MAIN, "uWaveBehind", U.waveBehind);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (U.capture) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, echo.f);
@@ -1453,9 +1470,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   var analyser = null;
   var recDest = null;
   var fbuf = null;
+  var tbuf = null;
   var prevBuf = null;
   var RG = null;
-  var SPEC = null;
   function ensureCtx() {
     if (actx) {
       if (actx.state === "suspended") actx.resume();
@@ -1472,6 +1489,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.3;
     fbuf = new Uint8Array(analyser.frequencyBinCount);
+    tbuf = new Uint8Array(analyser.fftSize);
     prevBuf = new Uint8Array(analyser.frequencyBinCount);
     src.connect(analyser);
     analyser.connect(actx.destination);
@@ -1490,8 +1508,6 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       snare: idx(1e3, 4500),
       hat: idx(7e3, 15e3)
     };
-    const n = A.spec.length, edge = (i) => 40 * Math.pow(300, i / n);
-    SPEC = Array.from({ length: n }, (_, i) => idx(edge(i), edge(i + 1)));
   }
   var recordStream = () => recDest && recDest.stream;
   function avg(r) {
@@ -1540,7 +1556,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     A.eFast = 0;
   }
   function analyse(dt) {
-    let lo = 0, mi = 0, hi = 0, lv = 0;
+    let lo = 0, mi = 0, hi = 0, lv = 0, wv = 0;
     const playing = analyser && !audio.paused;
     if (playing) {
       analyser.getByteFrequencyData(fbuf);
@@ -1553,6 +1569,17 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       mi = clamp((raw[1] - 0.25) / 0.75);
       hi = clamp((raw[2] - 0.2) / 0.8);
       lv = clamp(raw[3]);
+      if (analyser.getByteTimeDomainData) {
+        analyser.getByteTimeDomainData(tbuf);
+        let s = 0;
+        for (let i = 0; i < tbuf.length; i += 4) {
+          const v = (tbuf[i] - 128) / 128;
+          s += v * v;
+        }
+        const rms = Math.sqrt(s * 4 / tbuf.length);
+        A.wpk = Math.max(rms, A.wpk - dt * 0.03, 0.04);
+        wv = Math.pow(clamp((rms / A.wpk - 0.2) / 0.8), 1.25);
+      } else wv = lv;
       const t = G.clock;
       if (detect(DET.kick, flux(RG.kick), t, dt) && raw[0] > 0.45) {
         A.kick = 1;
@@ -1575,10 +1602,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     A.mid = env(A.mid, mi, 0.04, 0.3);
     A.high = env(A.high, hi, 0.01, 0.1);
     A.lvl = env(A.lvl, lv, 0.08, 0.6);
-    for (let i = 0, n = A.spec.length; i < n; i++) {
-      const v = playing ? clamp((avg(SPEC[i]) - 0.22) / 0.6 * (1 + 0.6 * i / n)) : 0;
-      A.spec[i] = env(A.spec[i], v, 0.02, 0.2);
-    }
+    A.wave = env(A.wave, wv, 8e-3, 0.08);
     if (playing) {
       const dv = 0.6 * lo + 0.4 * lv;
       A.eFast = env(A.eFast, dv, 0.15, 0.25);
@@ -1982,25 +2006,24 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     U.glow = V.glow * (0.6 + 0.8 * drop) * (1 + Math.max(0, pm.b) * 3);
     U.tape = P.mode === VHS ? Math.max(V.tape, 0.85) : V.tape;
     U.tapeHit = clamp2(0.9 * sn + 0.5 * k + drop + cut);
-    const span = Math.max(0.8, BEAT.period * 4);
-    S.waveAcc += dt * WAVE_N / span;
-    const sh = Math.min(WAVE_N, Math.floor(S.waveAcc));
+    const nb = 8 * Math.round(P.seg);
+    const span = Math.max(0.8, BEAT.period * 4) / clamp2(4.5 * spin, 0.2, 5);
+    const live = clamp2(F * (0.8 * A.wave + 0.25 * lo) + 0.45 * k);
+    WV.hist[0] = Math.max(WV.hist[0] * Math.exp(-dt * 6), live);
+    S.waveAcc += dt * nb / span;
+    const sh = Math.min(WAVE_N - 1, Math.floor(S.waveAcc));
     S.waveAcc -= Math.floor(S.waveAcc);
     if (sh > 0) {
       WV.hist.copyWithin(sh, 0);
-      WV.hist.fill(clamp2(0.6 * lo + 0.9 * k), 0, sh);
+      WV.hist.fill(live, 0, sh);
     }
-    S.waveT = (S.waveT + dt / span) % 2;
-    S.waveX += dt * spin * 0.28 * (0.25 + lv) * sl;
-    U.waveAmp = warp * (0.7 + 0.5 * mi);
-    if (P.mode === WAVE) {
-      const top = A.spec.length - 1;
-      for (let i = 0; i < WAVE_N; i++) {
-        const b = Math.abs(i / (WAVE_N - 1) - 0.5) * 2 * top, b0 = Math.floor(b), b1 = Math.min(top, b0 + 1);
-        WV.tex[i * 4] = 255 * clamp2((A.spec[b0] + (A.spec[b1] - A.spec[b0]) * (b - b0)) * F);
-        WV.tex[i * 4 + 1] = 255 * WV.hist[i];
-        WV.tex[i * 4 + 3] = 255;
-      }
+    U.waveN = nb;
+    U.waveT = S.waveAcc;
+    U.waveAmp = Math.min(1.15, (0.15 + 0.8 * warp) * (1 + 0.12 * lo));
+    U.waveBehind = V.behind;
+    if (P.mode === WAVE) for (let i = 0; i <= nb + 1; i++) {
+      WV.tex[i * 4 + 1] = 255 * WV.hist[i];
+      WV.tex[i * 4 + 3] = 255;
     }
     G.arc = journeyArc();
     if (G.trip) U.warp *= 0.7 + 0.3 * G.arc;
@@ -2081,7 +2104,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     write();
   }
   var RANGE = {};
-  [MACROS, FEEL, TEX, FOIL, TRIPFX].forEach((defs) => defs.forEach((d) => {
+  [MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX].forEach((defs) => defs.forEach((d) => {
     RANGE[d.k] = d;
   }));
   var num = (v, d, lo, hi) => typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
@@ -2146,6 +2169,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       "pad",
       "latchT",
       "latchT2",
+      "wavefx",
       "lKick",
       "lSnare",
       "lHat",
@@ -2238,9 +2262,10 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     buildFaders(el.tex, TEX, null);
     buildFaders(el.foil, FOIL, null);
     buildFaders(el.tripfx, TRIPFX, null);
+    buildFaders(el.wavefx, WAVEFX, null);
     el.segIn.addEventListener("input", () => {
       P.seg = parseInt(el.segIn.value, 10);
-      el.segOut.textContent = P.seg;
+      el.segOut.textContent = P.mode === WAVE ? 8 * P.seg : P.seg;
       setFill(el.segIn);
       if (AUTO.on) setAuto(false);
     });
@@ -2300,7 +2325,10 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       H.togglePlay();
     });
     el.playBtn.addEventListener("click", H.togglePlay);
-    ["pointermove", "pointerdown", "keydown"].forEach((t) => document.addEventListener(t, poke, { passive: true }));
+    ["pointermove", "pointerdown"].forEach((t) => document.addEventListener(t, poke, { passive: true }));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") poke(e);
+    });
     document.addEventListener("fullscreenchange", () => {
       if (!document.fullscreenElement && document.body.classList.contains("immersive") && fsByApi) setImmersive(false);
     });
@@ -2383,7 +2411,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
         G.easeTau = 0.08;
         if (kind === "look" && AUTO.on) setAuto(false);
       });
-      (faders[d.k] = faders[d.k] || []).push({ input, out, d });
+      (faders[d.k] = faders[d.k] || []).push({ input, out, d, lab: row.querySelector("label") });
       container.appendChild(row);
     });
   }
@@ -2394,8 +2422,14 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     pressed(el.miniModes, P.mode);
     el.foldRow.hidden = FOLD_MODES.indexOf(P.mode) < 0;
     el.foilWrap.hidden = P.mode !== HOLO;
+    const wave = P.mode === WAVE;
+    el.wavefx.hidden = !wave;
+    el.foldRow.querySelector("label").textContent = wave ? "Bars" : "Folds";
+    Object.keys(WAVE_LABELS).forEach((k) => faders[k].forEach((f) => {
+      f.lab.textContent = wave ? WAVE_LABELS[k] : f.d.label;
+    }));
     el.segIn.value = P.seg;
-    el.segOut.textContent = P.seg;
+    el.segOut.textContent = wave ? 8 * P.seg : P.seg;
     setFill(el.segIn);
     Object.keys(faders).forEach((k) => faders[k].forEach((f) => {
       f.input.value = P[k];

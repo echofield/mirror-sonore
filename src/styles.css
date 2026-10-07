@@ -295,6 +295,7 @@ body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;p
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .acts{position:static;padding:0;border:0;background:none}
 body.immersive .exitfs{display:grid}
+body.immersive .pad{display:none}
 body.immersive .tabs,body.immersive .meters,body.immersive .leds,body.immersive #fsBtn{display:none}
 body.immersive #latchT{display:inline-flex}
 body.immersive #shuffle{width:auto;padding:0 12px 0 10px}

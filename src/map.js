@@ -104,24 +104,22 @@ export function step(dt) {
   U.tape = P.mode === VHS ? Math.max(V.tape, .85) : V.tape;
   U.tapeHit = clamp(.9 * sn + .5 * k + drop + cut);
 
-  // Wave: the level enters on the left and crosses the picture in one bar, while the spectrum stands
-  // in place (bass in the middle, top end at the edges). Warp sets the height, Spin slides the picture sideways.
-  const span = Math.max(.8, BEAT.period * 4);
-  S.waveAcc += dt * WAVE_N / span;
-  const sh = Math.min(WAVE_N, Math.floor(S.waveAcc)); S.waveAcc -= Math.floor(S.waveAcc);
-  if (sh > 0) { WV.hist.copyWithin(sh, 0); WV.hist.fill(clamp(.6 * lo + .9 * k), 0, sh); }
-  S.waveT = (S.waveT + dt / span) % 2;
-  S.waveX += dt * spin * .28 * (.25 + lv) * sl;
-  U.waveAmp = warp * (.7 + .5 * mi);
-  if (P.mode === WAVE) {
-    const top = A.spec.length - 1;
-    for (let i = 0; i < WAVE_N; i++) {
-      const b = Math.abs(i / (WAVE_N - 1) - .5) * 2 * top, b0 = Math.floor(b), b1 = Math.min(top, b0 + 1);
-      WV.tex[i * 4] = 255 * clamp((A.spec[b0] + (A.spec[b1] - A.spec[b0]) * (b - b0)) * F);
-      WV.tex[i * 4 + 1] = 255 * WV.hist[i];
-      WV.tex[i * 4 + 3] = 255;
-    }
-  }
+  // Wave: the song's level, bar by bar, like the waveform of a track passing as a train. Bar 0 is being
+  // born at the left edge and follows the sound; every bar-step it leaves and travels to the right.
+  // Folds (shown as Bars) sets how many cross the picture, Spin (Speed) how fast they travel (at the
+  // default, one bar of music fills the screen), Warp (Height) how tall they stand. The bars are cut out
+  // of the picture; Behind lets the picture show around them.
+  const nb = 8 * Math.round(P.seg);
+  const span = Math.max(.8, BEAT.period * 4) / clamp(4.5 * spin, .2, 5);
+  const live = clamp(F * (.8 * A.wave + .25 * lo) + .45 * k);
+  WV.hist[0] = Math.max(WV.hist[0] * Math.exp(-dt * 6), live);
+  S.waveAcc += dt * nb / span;
+  const sh = Math.min(WAVE_N - 1, Math.floor(S.waveAcc)); S.waveAcc -= Math.floor(S.waveAcc);
+  if (sh > 0) { WV.hist.copyWithin(sh, 0); WV.hist.fill(live, 0, sh); }
+  U.waveN = nb; U.waveT = S.waveAcc;
+  U.waveAmp = Math.min(1.15, (.15 + .8 * warp) * (1 + .12 * lo));
+  U.waveBehind = V.behind;
+  if (P.mode === WAVE) for (let i = 0; i <= nb + 1; i++) { WV.tex[i * 4 + 1] = 255 * WV.hist[i]; WV.tex[i * 4 + 3] = 255; }
 
   // trip layer
   G.arc = journeyArc();

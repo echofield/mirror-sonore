@@ -156,7 +156,7 @@ export function render(now) {
   u1(MAIN, 'uFbRot', U.fbRot); u1(MAIN, 'uPalMix', V.palMix); u1(MAIN, 'uPalPhase', S.palPhase);
   u1(MAIN, 'uSlice', U.slice); u1(MAIN, 'uSliceSeed', S.sliceSeed); u1(MAIN, 'uHolo', U.holo); u1(MAIN, 'uBands', V.bands);
   u1(MAIN, 'uSparkle', U.sparkle); u1(MAIN, 'uBump', V.bump); u1(MAIN, 'uPokeAmp', U.pokeAmp);
-  u1(MAIN, 'uWaveAmp', U.waveAmp); u1(MAIN, 'uWaveT', S.waveT); u1(MAIN, 'uWaveX', S.waveX);
+  u1(MAIN, 'uWaveAmp', U.waveAmp); u1(MAIN, 'uWaveT', U.waveT); u1(MAIN, 'uWaveN', U.waveN); u1(MAIN, 'uWaveBehind', U.waveBehind);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
   if (U.capture) {                       // stepped tracers: hold this frame until the next capture

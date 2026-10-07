@@ -2,7 +2,7 @@
 // the trip layer, Beat/Pump/Flow, pump style, Auto) with a small picture of the moment it was kept. It does not hold the
 // image or the sound, so a kept look can be laid over any picture.
 // They live in this browser's storage. When storage is refused they last until the page closes.
-import { DIRS, TRIPS, MODES, KEYS, DEFAULTS, MACROS, FEEL, TEX, FOIL, TRIPFX, PUMP_STYLES, PUMP_LENGTHS, ECHO_RATES, BARS, TRANSITIONS } from './config.js';
+import { DIRS, TRIPS, MODES, KEYS, DEFAULTS, MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX, PUMP_STYLES, PUMP_LENGTHS, ECHO_RATES, BARS, TRANSITIONS } from './config.js';
 import { P, G, S, PUMP, AUTO } from './state.js';
 import { applyPalette, applyLook, setAuto } from './auto.js';
 
@@ -63,7 +63,7 @@ export function restoreKept(r) {
 // Bring a kept look back. Every value is checked against today's controls, so an entry kept by an
 // older version (or a damaged one) cannot put the page in a state the faders cannot reach.
 const RANGE = {};
-[MACROS, FEEL, TEX, FOIL, TRIPFX].forEach(defs => defs.forEach(d => { RANGE[d.k] = d; }));
+[MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX].forEach(defs => defs.forEach(d => { RANGE[d.k] = d; }));
 const num = (v, d, lo, hi) => (typeof v === 'number' && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
 
 export function applyKept(k) {

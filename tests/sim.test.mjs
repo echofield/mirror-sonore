@@ -55,7 +55,8 @@ function spectrum(arr) {
     arr[i] = Math.max(0, Math.min(255, v)); } }
 w.AudioContext = class { constructor() { this.sampleRate = 48000; this.state = 'running'; } resume() { return Promise.resolve(); }
   createMediaElementSource() { return { connect() {} }; }
-  createAnalyser() { return { fftSize: 2048, frequencyBinCount: 1024, smoothingTimeConstant: 0, connect() {}, getByteFrequencyData: spectrum }; }
+  createAnalyser() { return { fftSize: 2048, frequencyBinCount: 1024, smoothingTimeConstant: 0, connect() {}, getByteFrequencyData: spectrum,
+    getByteTimeDomainData(arr) { const t = audioEl[0].currentTime, amp = (t >= 8 && t < 12) ? .12 : .3 + .7 * Math.exp(-(t % .5) / .09); for (let i = 0; i < arr.length; i++) arr[i] = 128 + 110 * amp * Math.sin(i * .21); } }; }
   createMediaStreamDestination() { return { stream: { getAudioTracks: () => [{}] } }; } };
 w.OfflineAudioContext = class { constructor() { return new Proxy(this, { get: (t, p) => p === 'startRendering'
   ? () => Promise.resolve({ numberOfChannels: 2, sampleRate: 44100, length: 100, getChannelData: () => new Float32Array(100) })
@@ -157,14 +158,22 @@ for (const b of $('fmts').children) { click(b); await run(.1); }
 click($('fmts').children[0]);
 for (const b of $('tabs').children) { click(b); }
 check($('rack').dataset.tab === 'export', 'tabs switch the rack: ' + $('rack').dataset.tab);
-// Wave: the level history crosses the picture and the spectrum stands in it
+// Wave: the song's level, bar by bar, crosses the picture from left to right like a train
 const pressedIn = id => (Array.prototype.find.call($(id).children, b => b.getAttribute('aria-pressed') === 'true') || {}).textContent;
 click(Array.prototype.find.call($('modes').children, b => b.textContent === 'Wave')); await run(3);
 const wv = w.__ms.WV;
-check($('lookBadge').textContent.includes('Wave') && !$('foldRow').hidden, 'Wave mode is selectable and shows Folds: ' + $('lookBadge').textContent);
-check(Math.max(...wv.hist) > .3, 'Wave: kicks travel through the level history (peak ' + Math.max(...wv.hist).toFixed(2) + ')');
-const specPeak = Math.max(...Array.from({ length: 128 }, (_, i) => wv.tex[i * 4]));
-check(specPeak > 60 && wv.tex[64 * 4 + 3] === 255, 'Wave: the spectrum stands in the picture (peak ' + specPeak + ' of 255)');
+const labelOf = id => $(id).parentElement.querySelector('label').textContent;
+check($('lookBadge').textContent.includes('Wave') && labelOf('segIn') === 'Bars' && labelOf('f-warp') === 'Height' && labelOf('f-spin') === 'Speed' && !$('wavefx').hidden,
+  'Wave is selectable and names its faders Bars, Height, Speed, Behind: ' + $('lookBadge').textContent + ' · ' + $('segOut').textContent + ' bars');
+const bars = w.__ms.U.waveN, train = Array.from(wv.hist.slice(1, bars + 1));
+const loud = train.filter(v => v > .5).length, soft = train.filter(v => v < .35).length;
+check(bars === 64 && loud > 8 && soft > 8, `Wave: the train holds the song's shape (${bars} bars across, ${loud} loud, ${soft} quiet)`);
+const first = wv.hist[1]; let moved = false, born = false;
+await run(.3, () => { if (wv.hist[2] === first || wv.hist[3] === first) moved = true; if (w.__ms.U.waveT > 0 && w.__ms.U.waveT < 1) born = true; });
+check(moved && born, 'Wave: each bar leaves the left edge and travels right');
+click($('modes').children[1]); await run(.2);
+check(labelOf('segIn') === 'Folds' && labelOf('f-warp') === 'Warp' && $('wavefx').hidden, 'leaving Wave gives the faders their names back');
+click(Array.prototype.find.call($('modes').children, b => b.textContent === 'Wave')); await run(.2);
 
 check(['modes', 'miniModes'].every(id => Array.prototype.find.call($(id).children, b => b.textContent === 'Wave').classList.contains('hot')), 'Wave is marked in both mode pickers');
 
@@ -227,6 +236,12 @@ beat.value = '0.8'; beat.dispatchEvent(new w.Event('input')); warp.value = '0.25
 
 click($('fsBtn')); await run(.2);
 check(w.document.body.classList.contains('immersive'), 'full screen opens');
+w.document.body.classList.add('ui-off');
+key('keydown', 'ArrowUp'); await run(.3); key('keyup', 'ArrowUp'); key('keydown', '3'); await run(.2);
+check(w.document.body.classList.contains('ui-off') && HAND.v.zoom > .1, 'in full screen, playing with the keys leaves the picture clear');
+w.document.dispatchEvent(new w.MouseEvent('pointermove', { bubbles: true }));
+check(!w.document.body.classList.contains('ui-off'), 'moving the pointer brings the controls back');
+await run(1.6);
 click($('exitFs')); await run(.2);
 check(!w.document.body.classList.contains('immersive'), 'full screen closes');
 

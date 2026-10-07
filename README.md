@@ -2,7 +2,7 @@
 
 Drop a picture (an image or a video) and a sound. The picture folds, warps and hits with the music. Record vertical clips for TikTok, Reels or Shorts with the audio baked in, save still images, and keep the looks you like.
 
-- **Modes:** Mirror, Kaleido, Tunnel, Liquid, Holo (iridescent foil), Fractal (Julia set), Infinite (endless zoom), Wave (the picture stays in place while the music runs through it from left to right), VHS (the picture played back from a worn tape; the Tape fader lays the same tape over any other mode).
+- **Modes:** Mirror, Kaleido, Tunnel, Liquid, Holo (iridescent foil), Fractal (Julia set), Infinite (endless zoom), Wave (the song's waveform, bar by bar, passing like a train from left to right and cut out of the picture), VHS (the picture played back from a worn tape; the Tape fader lays the same tape over any other mode).
 - **Hands:** drag on the picture to play it. Sideways turns it, up and down zooms; two fingers set trails and warp. Let go and it springs back, or switch Latch on and it stays. Auto keeps running underneath.
 - **Picture:** an image, or a video whose frames go through the same modes. A video dropped on the page is used for picture and sound.
 - **Image:** saves the current frame as a PNG at the full export size.

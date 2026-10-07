@@ -12,7 +12,7 @@ uniform sampler2D uImg; uniform sampler2D uPrev; uniform sampler2D uWave;
 uniform vec2 uRes; uniform vec2 uDrift; uniform vec2 uTilt; uniform vec2 uJulia;
 uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform vec3 uBg; uniform vec3 uPoke;
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
-uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveX;
+uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveN, uWaveBehind;
 uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -121,6 +121,7 @@ void main(){
   } else {
     // ---- coordinate modes: Mirror, Kaleido, Tunnel, Liquid, Infinite, Wave, VHS ----
     vec2 q;
+    float wm = 1.0; float wtail = 0.0;      // Wave: inside a bar (0 to 1), and how far along the train (0 = just born)
     if(uMode > 0.5 && uMode < 1.5){        // Kaleido: fold before the warp so symmetry holds
       float r = length(p); float a = atan(p.y, p.x);
       float seg = 6.2831853/uSeg;
@@ -142,11 +143,18 @@ void main(){
       q = p + w2*uWarp*1.4;
     } else if(uMode > 7.5){                // VHS: the picture played straight, held by hand; the tape is in the post pass
       q = p + 0.012*vec2(sin(uT*0.7), cos(uT*0.53));
-    } else if(uMode > 6.5){                // Wave: the picture stays in place and the music runs through it
-      float x = fc.x/uRes.x;
-      vec4 wv = texture2D(uWave, vec2(x, 0.5));   // r: spectrum standing in place, g: level history crossing left to right
-      float trav = wv.g*sin((x - uWaveT)*3.14159265*uSeg);
-      q = vec2(p.x - uWaveX, p.y/(1.0 + 1.8*uWaveAmp*wv.r) - 0.22*uWaveAmp*trav);
+    } else if(uMode > 6.5){                // Wave: the song's level as a train of bars crossing left to right, cut out of the picture
+      q = p;
+      float bx = fc.x/uRes.x*uWaveN - uWaveT;         // uWaveT: how far the bar being born at the left edge has come out
+      float lvl = texture2D(uWave, vec2((floor(bx) + 1.5)/256.0, 0.5)).g;
+      float pitch = uRes.x/(uRes.y*uWaveN);           // one bar and its gap, in screen heights
+      float hw = 0.36*pitch;
+      float hh = max(0.5*uWaveAmp*lvl, 0.0035);       // silence still draws a thin line
+      float rr = min(hw, hh);
+      vec2 dd = abs(vec2((fract(bx) - 0.5)*pitch, p0.y)) - vec2(hw - rr, hh - rr);
+      float sd = length(max(dd, 0.0)) + min(max(dd.x, dd.y), 0.0) - rr;
+      wm = 1.0 - smoothstep(-1.2/uRes.y, 1.2/uRes.y, sd);
+      wtail = fc.x/uRes.x;
     } else {                               // Infinite: log-polar zoom, mirrored per octave, with folds and spiral
       float r = max(length(p), 0.0001); float lr = log(r); float a = atan(p.y, p.x);
       float seg = 6.2831853/uSeg;
@@ -163,6 +171,7 @@ void main(){
     col.g = texture2D(uImg, mr(uv)).g;
     col.b = texture2D(uImg, mr(uv - dir)).b;
     col = gradeMap(col);
+    if(uMode > 6.5 && uMode < 7.5) col = mix(mix(uBg, col, uWaveBehind), col*(1.0 - 0.35*wtail), wm);
   }
 
   col = hueRot(col, uHue);

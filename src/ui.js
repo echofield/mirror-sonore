@@ -1,5 +1,5 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
-import { MODES, MARKED_MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
+import { MODES, MARKED_MODES, FOLD_MODES, HOLO, WAVE, WAVEFX, WAVE_LABELS, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
 import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP, HAND } from './state.js';
 import { initHands, handKey, wasDrag, setLatch, centreHands } from './hands.js';
 import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
@@ -15,7 +15,7 @@ export function initUI(handlers) {
   H = handlers;
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'miniKept', 'recMini', 'recMiniLbl',
-   'shotBtn', 'keepBtn', 'kept', 'keptNote', 'pad', 'latchT', 'latchT2',
+   'shotBtn', 'keepBtn', 'kept', 'keptNote', 'pad', 'latchT', 'latchT2', 'wavefx',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
    'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
@@ -51,8 +51,9 @@ export function initUI(handlers) {
   buildFaders(el.tex, TEX, null);
   buildFaders(el.foil, FOIL, null);
   buildFaders(el.tripfx, TRIPFX, null);
+  buildFaders(el.wavefx, WAVEFX, null);
   el.segIn.addEventListener('input', () => {
-    P.seg = parseInt(el.segIn.value, 10); el.segOut.textContent = P.seg; setFill(el.segIn);
+    P.seg = parseInt(el.segIn.value, 10); el.segOut.textContent = P.mode === WAVE ? 8 * P.seg : P.seg; setFill(el.segIn);
     if (AUTO.on) setAuto(false);
   });
 
@@ -93,7 +94,9 @@ export function initUI(handlers) {
   });
   el.bigPlay.addEventListener('click', e => { e.stopPropagation(); H.togglePlay(); });
   el.playBtn.addEventListener('click', H.togglePlay);
-  ['pointermove', 'pointerdown', 'keydown'].forEach(t => document.addEventListener(t, poke, { passive: true }));
+  // in full screen only the pointer brings the controls back: keys are for playing, and the picture stays clear
+  ['pointermove', 'pointerdown'].forEach(t => document.addEventListener(t, poke, { passive: true }));
+  document.addEventListener('keydown', e => { if (e.key === 'Tab') poke(e); });
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('immersive') && fsByApi) setImmersive(false); });
   document.addEventListener('webkitfullscreenchange', () => { if (!document.webkitFullscreenElement && document.body.classList.contains('immersive') && fsByApi) setImmersive(false); });
 
@@ -153,7 +156,7 @@ function buildFaders(container, defs, kind) {
       G.easeTau = .08;
       if (kind === 'look' && AUTO.on) setAuto(false);
     });
-    (faders[d.k] = faders[d.k] || []).push({ input, out, d });
+    (faders[d.k] = faders[d.k] || []).push({ input, out, d, lab: row.querySelector('label') });
     container.appendChild(row);
   });
 }
@@ -163,7 +166,12 @@ export function syncUI() {
   pressed(el.modes, P.mode); pressed(el.miniModes, P.mode);
   el.foldRow.hidden = FOLD_MODES.indexOf(P.mode) < 0;
   el.foilWrap.hidden = P.mode !== HOLO;
-  el.segIn.value = P.seg; el.segOut.textContent = P.seg; setFill(el.segIn);
+  // Wave names three faders for what they do there: Bars, Height, Speed; and brings its own, Behind
+  const wave = P.mode === WAVE;
+  el.wavefx.hidden = !wave;
+  el.foldRow.querySelector('label').textContent = wave ? 'Bars' : 'Folds';
+  Object.keys(WAVE_LABELS).forEach(k => faders[k].forEach(f => { f.lab.textContent = wave ? WAVE_LABELS[k] : f.d.label; }));
+  el.segIn.value = P.seg; el.segOut.textContent = wave ? 8 * P.seg : P.seg; setFill(el.segIn);
   Object.keys(faders).forEach(k => faders[k].forEach(f => { f.input.value = P[k]; f.out.textContent = f.d.fmt(P[k]); setFill(f.input); }));
   el.lookBadge.textContent = (G.trip && G.dir !== G.trip ? G.trip + ' · ' : '') + G.dir + ' · ' + MODES[P.mode] + (AUTO.on ? ' · Auto' : '');
   syncPump();

@@ -11,7 +11,7 @@ audio.preload = 'auto';
 // Event hooks, wired in main.js.
 export const on = { kick: null, snare: null, hat: null, drop: null };
 
-let actx = null, analyser = null, recDest = null, fbuf = null, prevBuf = null, RG = null, SPEC = null;
+let actx = null, analyser = null, recDest = null, fbuf = null, tbuf = null, prevBuf = null, RG = null;
 
 // Must run inside a user gesture (iOS/Chrome autoplay rules). Safe to call repeatedly.
 export function ensureCtx() {
@@ -24,6 +24,7 @@ export function ensureCtx() {
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = .3;
   fbuf = new Uint8Array(analyser.frequencyBinCount);
+  tbuf = new Uint8Array(analyser.fftSize);
   prevBuf = new Uint8Array(analyser.frequencyBinCount);
   src.connect(analyser);
   analyser.connect(actx.destination);
@@ -32,8 +33,6 @@ export function ensureCtx() {
   const idx = (lo, hi) => [Math.max(1, Math.floor(lo / hz)), Math.min(fbuf.length - 1, Math.ceil(hi / hz))];
   RG = { low: idx(35, 130), mid: idx(300, 2500), high: idx(5000, 14000), all: idx(35, 14000),
          kick: idx(35, 150), snare: idx(1000, 4500), hat: idx(7000, 15000) };
-  const n = A.spec.length, edge = i => 40 * Math.pow(300, i / n);   // 40 Hz → 12 kHz
-  SPEC = Array.from({ length: n }, (_, i) => idx(edge(i), edge(i + 1)));
 }
 export const recordStream = () => recDest && recDest.stream;
 
@@ -70,13 +69,22 @@ export function resetAnalysis() {
 }
 
 export function analyse(dt) {
-  let lo = 0, mi = 0, hi = 0, lv = 0;
+  let lo = 0, mi = 0, hi = 0, lv = 0, wv = 0;
   const playing = analyser && !audio.paused;
   if (playing) {
     analyser.getByteFrequencyData(fbuf);
     const raw = [avg(RG.low), avg(RG.mid), avg(RG.high), avg(RG.all)];
     for (let i = 0; i < 4; i++) { A.pk[i] = Math.max(raw[i], A.pk[i] - dt * .04, .12); raw[i] /= A.pk[i]; }
     lo = clamp((raw[0] - .35) / .65); mi = clamp((raw[1] - .25) / .75); hi = clamp((raw[2] - .2) / .8); lv = clamp(raw[3]);
+    // the waveform's own level, as a track's waveform display shows it: RMS against its running peak
+    if (analyser.getByteTimeDomainData) {
+      analyser.getByteTimeDomainData(tbuf);
+      let s = 0;
+      for (let i = 0; i < tbuf.length; i += 4) { const v = (tbuf[i] - 128) / 128; s += v * v; }
+      const rms = Math.sqrt(s * 4 / tbuf.length);
+      A.wpk = Math.max(rms, A.wpk - dt * .03, .04);
+      wv = Math.pow(clamp((rms / A.wpk - .2) / .8), 1.25);
+    } else wv = lv;
     const t = G.clock;
     if (detect(DET.kick, flux(RG.kick), t, dt) && raw[0] > .45) { A.kick = 1; trackTempo(); on.kick && on.kick(); }
     if (detect(DET.snare, flux(RG.snare), t, dt)) { A.snare = 1; on.snare && on.snare(); }
@@ -86,10 +94,7 @@ export function analyse(dt) {
   }
   const env = (cur, target, att, rel) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? att : rel)));
   A.low = env(A.low, lo, .012, .14); A.mid = env(A.mid, mi, .04, .3); A.high = env(A.high, hi, .01, .1); A.lvl = env(A.lvl, lv, .08, .6);
-  for (let i = 0, n = A.spec.length; i < n; i++) {
-    const v = playing ? clamp((avg(SPEC[i]) - .22) / .6 * (1 + .6 * i / n)) : 0;   // the tilt lifts the quieter top end
-    A.spec[i] = env(A.spec[i], v, .02, .2);
-  }
+  A.wave = env(A.wave, wv, .008, .08);
   if (playing) {
     // Drop: bass-weighted energy jumps well above its recent average, after a 4 s warm-up.
     const dv = .6 * lo + .4 * lv;

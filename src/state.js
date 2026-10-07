@@ -15,13 +15,13 @@ export const S = {
   poke: [0, 0, 9],   // holo ripple: x, y, age in seconds
   morph: 0,          // 1 right after a Morph transition, decays to 0
   pumpT: 9,          // seconds since the last kick, for the pump envelope
-  waveT: 0, waveX: 0, waveAcc: 0,  // Wave mode: travel of the passing wave, sideways slide, history scroll remainder
+  waveAcc: 0,        // Wave mode: how far the bar being born at the left edge has come out (0 to 1)
   echoT: 0           // seconds since the last tracer capture
 };
 
-// Wave mode: what the shader reads across the picture's width. hist is the level history
-// (newest on the left); tex is the RGBA row uploaded each frame (r: spectrum in place, g: history).
-export const WAVE_N = 128;
+// Wave mode: the train of bars. hist[0] is the bar being born at the left edge, hist[1] the one that
+// just left, and so on to the right; tex is the RGBA row uploaded each frame (g: the level).
+export const WAVE_N = 256;
 export const WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N * 4) };
 
 // The hands: offsets played on top of the look by dragging on the picture or holding the arrow keys
@@ -37,7 +37,7 @@ export const A = {
   kick: 0, snare: 0, hat: 0, drop: 0, cut: 0,
   eFast: 0, eSlow: 0, lastDrop: -99, playT: 0,
   pk: [.2, .2, .2, .2],
-  spec: new Float32Array(48)   // smoothed spectrum, 40 Hz → 12 kHz in log-spaced bands (Wave mode)
+  wave: 0, wpk: .1   // the sound's own level (RMS of the waveform), shaped for the Wave mode, and its running peak
 };
 
 export const BEAT = { iois: [], last: -9, period: .5, bpm: 0 };
