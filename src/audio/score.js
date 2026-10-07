@@ -65,6 +65,44 @@ export function makeReader(buffer) {
 
 // Mean energy of the score between two times (cum holds the running sum, one entry a step).
 const meanE = (cum, fps, n, a, b) => { const i = Math.min(n, Math.max(0, Math.round(a * fps))), j = Math.min(n, Math.max(i + 1, Math.round(b * fps))); return (cum[j] - cum[i]) / (j - i); };
+// How well a set of times falls on one grid of period p: the length of their mean vector on the circle.
+function onGrid(ts, p) { let sx = 0, sy = 0; for (let i = 0; i < ts.length; i++) { const g = 2 * Math.PI * ts[i] / p; sx += Math.cos(g); sy += Math.sin(g); } return Math.hypot(sx, sy) / ts.length; }
+// The peaks of that fit between two periods; of those within 90% of the best, the longest one.
+function gridPeak(ts, lo, hi, step) {
+  const peaks = []; let top = 0, prev = 0, prev2 = 0;
+  for (let p = lo; p <= hi + step; p += step) {
+    const r = p <= hi ? onGrid(ts, p) : 0;
+    if (prev > prev2 && prev >= r) { peaks.push({ p: p - step, r: prev }); if (prev > top) top = prev; }
+    prev2 = prev; prev = r;
+  }
+  let best = null;
+  for (const k of peaks) if (k.r >= .9 * top) best = k;
+  return best;
+}
+// The beat of a track from all its kicks and snares at once. First on 20 s stretches (a tempo that drifts
+// must not blur the answer), then sharpened against the whole track. Returns the beat, folded into the
+// range the live tempo uses (80 to 171 BPM), and the grain: the finest grid the hits agree on, which is
+// half or a quarter of the beat when something answers the kick on the off-beat. Null with too little to go on.
+function fitBeat(hits, duration) {
+  const ts = hits.filter(h => h.k === 'kick' || h.k === 'snare').map(h => h.t);
+  if (ts.length < 8) return null;
+  const fold = p => { while (p < .35) p *= 2; while (p > .75) p /= 2; return p; };
+  const found = [];
+  for (let a = 0; a < duration; a += 20) {
+    const part = ts.filter(t => t >= a && t < a + 20);
+    if (part.length < 8) continue;
+    const k = gridPeak(part, .175, .75, .001);
+    if (k && k.r > .5) found.push(fold(k.p));
+  }
+  if (!found.length) return null;
+  const rough = median(found), span = Math.max(1, ts[ts.length - 1] - ts[0]);
+  let grain = rough, top = 0;
+  for (const base of [rough, rough / 2, rough / 4]) {
+    for (let q = base * .985, step = base * base / (8 * span); q <= base * 1.015; q += step) { const r = onGrid(ts, q); if (r > top) { top = r; grain = q; } }
+  }
+  if (top < .3) grain = rough;       // the tempo wanders: keep the rough value
+  return { beat: fold(grain), grain };
+}
 const median = a => { const s = Array.from(a).sort((p, q) => p - q); return s.length ? s[s.length >> 1] : 0; };
 const pause = () => new Promise(r => setTimeout(r, 0));
 
@@ -99,21 +137,25 @@ export async function scanTrack(buffer, onProgress) {
 
   // where the beats and the bars fall: the tempo the detectors settled on most of the time, the place
   // of the kicks inside a beat, and as the "one" the beat the drops land on
-  const beatLen = tempos.length ? median(tempos) : .5, bar = 4 * beatLen;
-  let sx = 0, sy = 0;
-  hits.forEach(h => { if (h.k === 'kick') { const g = 2 * Math.PI * (h.t % beatLen) / beatLen; sx += Math.cos(g); sy += Math.sin(g); } });
-  let phase = (sx || sy) ? Math.atan2(sy, sx) / (2 * Math.PI) * beatLen : 0; if (phase < 0) phase += beatLen;
+  const fitted = fitBeat(hits, buffer.duration);
+  const beatLen = fitted ? fitted.beat : (tempos.length ? median(tempos) : .5), grain = fitted ? fitted.grain : beatLen, bar = 4 * beatLen;
+  // where the grid sits: the mean place of the hits inside one grain
+  let sx = 0, sy = 0, first = -1;
+  hits.forEach(h => { if (h.k === 'kick' || h.k === 'snare') { if (first < 0 && h.k === 'kick') first = h.t; const g = 2 * Math.PI * (h.t % grain) / grain; sx += Math.cos(g); sy += Math.sin(g); } });
+  let phase = (sx || sy) ? Math.atan2(sy, sx) / (2 * Math.PI) * grain : 0; if (phase < 0) phase += grain;
   // The drop detector also fires inside a steady groove. A rise is a drop where the next two seconds
-  // are clearly louder than the four before: those mark the sections, and the bars are counted from them.
+  // are clearly louder than the four before: those mark the sections, and the bars are counted from
+  // them (from the first kick when the track has none).
   const drops = hits.filter(h => h.k === 'drop').map(h => h.t);
   const rises = drops.filter(d => meanE(cum, FPS, n, d, d + 2) > 1.5 * meanE(cum, FPS, n, d - 4, d));
+  const marks = rises.length ? rises : (first >= 0 ? [first] : []);
   let off = phase, bestFit = -Infinity;
-  for (let c = 0; c < 4; c++) {
-    const o = phase + c * beatLen; let fit = 0;
-    rises.forEach(d => { fit += Math.cos(2 * Math.PI * (d - o) / bar); });
+  for (let c = 0, slots = Math.max(1, Math.round(bar / grain)); c < slots; c++) {
+    const o = phase + c * grain; let fit = 0;
+    marks.forEach(d => { fit += Math.cos(2 * Math.PI * (d - o) / bar); });
     if (fit > bestFit + 1e-9) { bestFit = fit; off = o; }
   }
-  return { fps: FPS, n, env, period, cum, hits, peaks, drops, rises, duration: buffer.duration, beat: beatLen, bar, off: off % bar, bpm: tempos.length ? Math.round(60 / beatLen) : 0 };
+  return { fps: FPS, n, env, period, cum, hits, peaks, drops, rises, duration: buffer.duration, beat: beatLen, bar, off: off % bar, bpm: (fitted || tempos.length) ? Math.round(60 / beatLen) : 0 };
 }
 
 // The nearest bar line.

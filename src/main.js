@@ -3,6 +3,7 @@ import { G, P, A, SESSION, OUT, U, V, S, PUMP, BEAT, WV, HAND, SONG, CLIP } from
 import { decodeTrack, scanTrack, bestStart } from './audio/score.js';
 import { LENS } from './config.js';
 import { handTick } from './hands.js';
+import { initSongBar, drawSongBar } from './songbar.js';
 import { initRenderer, uploadImage, uploadOver, useVideo, render } from './gl/renderer.js';
 import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
 import { makeSampleLoop } from './audio/sample-loop.js';
@@ -37,12 +38,21 @@ function boot() {
   initRecord(canvas);
   initUI({
     togglePlay, routeFile, loadPictureFile, loadSoundFile, loadOverFile, clearOver, applySize, saveBlob, takeStill,
+    lengthChanged: () => placeClip(CLIP.start),
+    bestClip: () => { if (SONG.score && !SESSION.active) { placeClip(bestStart(SONG.score, LENS[OUT.len] || 0)); audio.currentTime = CLIP.start; } },
     toggleRecord: () => toggleRecord(soundReady),
     soundReady: () => soundReady, canRecord, isPlaying: () => !audio.paused, ext: MIME ? EXT : ''
   });
   if (!window.MediaRecorder || !canvas.captureStream) {
     el.recNote.textContent = 'Recording needs a browser that can capture video, such as Chrome, Edge, Firefox or Safari 14.1 and later.';
   }
+
+  // the song bar: a tap or a drag places the clip (and the sound with it); with the whole track as length it only moves the sound
+  initSongBar(el.songWave, audio, (start, seek, done) => {
+    if (SESSION.active) return;
+    CLIP.start = start;
+    if (done && isFinite(audio.duration)) audio.currentTime = Math.min(audio.duration, seek);
+  });
 
   on.kick = () => { reactKick(); autoOnKick(); };
   on.snare = reactSnare;
@@ -152,6 +162,7 @@ let songSeq = 0;
 async function readSong(blob) {
   const my = ++songSeq;
   Object.assign(SONG, { state: 'reading', progress: 0, buffer: null, score: null });
+  el.bestBtn.disabled = true;
   try {
     const buffer = await decodeTrack(await blob.arrayBuffer());
     if (my !== songSeq) return;
@@ -159,7 +170,9 @@ async function readSong(blob) {
     const score = await scanTrack(buffer, p => { if (my === songSeq) SONG.progress = p; });
     if (my !== songSeq) return;
     Object.assign(SONG, { state: 'ready', progress: 1, buffer, score });
-    placeClip(bestStart(score, CLIP.len));
+    placeClip(bestStart(score, LENS[OUT.len] || 0));
+    el.bestBtn.disabled = false;
+    if (audio.paused) audio.currentTime = CLIP.start;
   } catch (e) {
     if (my === songSeq) Object.assign(SONG, { state: 'failed', buffer: null, score: null });
   }
@@ -199,6 +212,11 @@ function frame(now) {
   const dt = Math.min(.05, Math.max(.001, (now - prevNow) / 1000)); prevNow = now;
   const playing = !audio.paused;
   if (playing) G.clock += dt;
+  // the clip plays in a loop, so what is heard is what a recording will hold
+  if (playing && !SESSION.active && CLIP.len > 0 && isFinite(audio.duration) && CLIP.len < audio.duration - .05) {
+    const end = Math.min(audio.duration, CLIP.start + CLIP.len);
+    if (audio.currentTime >= end - .02 || audio.currentTime < CLIP.start - .05) audio.currentTime = CLIP.start;
+  }
   analyse(dt);
   syncVideo(playing);
   autoTick(playing);
@@ -206,6 +224,7 @@ function frame(now) {
   step(dt);
   render(now);
   updateHUD(audio, scrubbing);
+  drawSongBar();
   recordTick(now);
   adaptQuality(dt, now, SESSION.active);
   requestAnimationFrame(frame);

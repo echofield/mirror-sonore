@@ -160,6 +160,7 @@ for (const b of $('tabs').children) { click(b); }
 check($('rack').dataset.tab === 'export', 'tabs switch the rack: ' + $('rack').dataset.tab);
 // Wave: the song's level, bar by bar, crosses the picture from left to right like a train
 const pressedIn = id => (Array.prototype.find.call($(id).children, b => b.getAttribute('aria-pressed') === 'true') || {}).textContent;
+audioEl[0].currentTime = 1;      // in the groove, well before the breakdown, so the train is known
 click(Array.prototype.find.call($('modes').children, b => b.textContent === 'Wave')); await run(3);
 const wv = w.__ms.WV;
 const labelOf = id => $(id).parentElement.querySelector('label').textContent;

@@ -16,7 +16,7 @@ export function initUI(handlers) {
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'miniKept', 'recMini', 'recMiniLbl',
    'shotBtn', 'keepBtn', 'kept', 'keptNote', 'pad', 'latchT', 'latchT2', 'wavefx',
-   'thumb2', 'img2Name', 'img2In', 'overBox', 'blends', 'overfx', 'img2Clear',
+   'thumb2', 'img2Name', 'img2In', 'overBox', 'blends', 'overfx', 'img2Clear', 'songWave', 'bestBtn',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
    'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
@@ -63,7 +63,8 @@ export function initUI(handlers) {
 
   Object.keys(FORMATS).forEach(v => addBtn(el.fmts, v, v, () => { if (SESSION.active) return; OUT.fmt = v; H.applySize(); syncExport(); }));
   Object.keys(QUALS).forEach(v => addBtn(el.quals, v, v, () => { if (SESSION.active) return; OUT.q = v; H.applySize(); syncExport(); }));
-  Object.keys(LENS).forEach(v => addBtn(el.lens, v, v, () => { if (SESSION.active) return; OUT.len = v; syncExport(); }));
+  Object.keys(LENS).forEach(v => addBtn(el.lens, v, v, () => { if (SESSION.active) return; OUT.len = v; H.lengthChanged(); syncExport(); }));
+  el.bestBtn.addEventListener('click', () => H.bestClip());
   CLIPS.forEach(n => addBtn(el.clips, n, String(n), () => { if (SESSION.active) return; OUT.clips = n; syncExport(); }));
   el.safeT.addEventListener('change', syncExport);
 
@@ -229,6 +230,7 @@ export function syncExport() {
   if (!SESSION.active) {
     const len = OUT.len === 'Full' ? 'full track' : OUT.len;
     el.recLbl.textContent = OUT.clips > 1 ? `Record ${OUT.clips} clips · ${len}` : `Record ${len}`;
+    el.bestBtn.textContent = OUT.len === 'Full' ? 'Best' : 'Best ' + OUT.len;
     el.recMiniLbl.textContent = 'Record ' + (OUT.len === 'Full' ? 'full' : OUT.len);
   }
 }

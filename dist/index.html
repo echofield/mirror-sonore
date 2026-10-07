@@ -101,6 +101,12 @@ svg{display:block}
 .safe .s-rail{right:0;top:36%;width:15%;height:43%}
 .safe span{position:absolute;left:10px;bottom:calc(21% + 8px);font-family:var(--f-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--pic-fg);opacity:.8}
 
+/* the song: its waveform, the clip, and where the sound is */
+.songbar{width:min(100%,520px);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.songbar canvas{width:100%;height:44px;display:block;touch-action:none;cursor:pointer}
+body:not(.immersive) .scrub input{display:none}
+body:not(.immersive) .times{margin-top:0;flex-direction:column;gap:2px}
+
 /* live controls next to the picture */
 .side{width:min(100%,520px);display:flex;flex-direction:column;gap:12px;min-width:0}
 .transport{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
@@ -246,9 +252,10 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 
 /* ---------- wide screen: picture, live controls and rack side by side ---------- */
 @media (min-width:1180px){
-  .stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,340px);gap:24px;align-items:start}
-  .monitor{justify-self:center;width:min(100%,max(220px,calc((100vh - 150px) * var(--arn))))}
-  .side{width:auto;gap:16px}
+  .stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,340px);grid-template-rows:auto 1fr;gap:16px 24px;align-items:start}
+  .monitor{grid-column:1;grid-row:1 / span 2;justify-self:center;width:min(100%,max(220px,calc((100vh - 150px) * var(--arn))))}
+  .songbar{grid-column:2;grid-row:1;width:auto}
+  .side{grid-column:2;grid-row:2;width:auto;gap:16px}
   .macros{grid-template-columns:minmax(0,1fr);gap:4px}
 }
 
@@ -260,7 +267,10 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
   .mark{font-size:19px}
   .spec{font-size:9.5px;letter-spacing:.08em}
   .stage{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;margin-inline:-16px;padding:10px 16px 0;background:var(--paper);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);
-         display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"mon side" "tabs tabs";gap:10px 12px;align-items:start}
+         display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"mon side" "song song" "tabs tabs";gap:10px 12px;align-items:start}
+  .songbar{grid-area:song;width:auto}
+  .songbar canvas{height:40px}
+  #bestBtn{min-height:40px}
   .monitor{grid-area:mon;width:auto;height:min(42vh,calc(54vw / var(--arn)))}
   @supports (height:1svh){ .monitor{height:min(42svh,calc(54vw / var(--arn)))} }
   .side{grid-area:side;width:auto;gap:6px}
@@ -313,6 +323,7 @@ body.immersive .mini{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;p
 body.immersive .mini::-webkit-scrollbar{display:none}
 body.immersive .acts{position:static;padding:0;border:0;background:none}
 body.immersive .exitfs{display:grid}
+body.immersive .songbar{display:none}
 body.immersive .pad{display:none}
 body.immersive .tabs,body.immersive .meters,body.immersive .leds,body.immersive #fsBtn{display:none}
 body.immersive #latchT{display:inline-flex}
@@ -363,6 +374,11 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     <button class="corner exitfs" id="exitFs" type="button" aria-label="Exit full screen">
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
     </button>
+
+    <div class="songbar" id="songBar">
+      <canvas id="songWave" aria-label="The song. Tap to start the clip there, drag the clip to move it."></canvas>
+      <button class="qbtn" id="bestBtn" type="button" disabled>Best</button>
+    </div>
 
     <div class="side" id="side">
       <div class="transport">
@@ -1073,6 +1089,61 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     const i = Math.min(n, Math.max(0, Math.round(a * fps))), j = Math.min(n, Math.max(i + 1, Math.round(b * fps)));
     return (cum[j] - cum[i]) / (j - i);
   };
+  function onGrid(ts, p) {
+    let sx = 0, sy = 0;
+    for (let i = 0; i < ts.length; i++) {
+      const g2 = 2 * Math.PI * ts[i] / p;
+      sx += Math.cos(g2);
+      sy += Math.sin(g2);
+    }
+    return Math.hypot(sx, sy) / ts.length;
+  }
+  function gridPeak(ts, lo, hi, step2) {
+    const peaks = [];
+    let top = 0, prev = 0, prev2 = 0;
+    for (let p = lo; p <= hi + step2; p += step2) {
+      const r = p <= hi ? onGrid(ts, p) : 0;
+      if (prev > prev2 && prev >= r) {
+        peaks.push({ p: p - step2, r: prev });
+        if (prev > top) top = prev;
+      }
+      prev2 = prev;
+      prev = r;
+    }
+    let best = null;
+    for (const k of peaks) if (k.r >= 0.9 * top) best = k;
+    return best;
+  }
+  function fitBeat(hits, duration2) {
+    const ts = hits.filter((h) => h.k === "kick" || h.k === "snare").map((h) => h.t);
+    if (ts.length < 8) return null;
+    const fold = (p) => {
+      while (p < 0.35) p *= 2;
+      while (p > 0.75) p /= 2;
+      return p;
+    };
+    const found = [];
+    for (let a = 0; a < duration2; a += 20) {
+      const part = ts.filter((t) => t >= a && t < a + 20);
+      if (part.length < 8) continue;
+      const k = gridPeak(part, 0.175, 0.75, 1e-3);
+      if (k && k.r > 0.5) found.push(fold(k.p));
+    }
+    if (!found.length) return null;
+    const rough = median(found), span = Math.max(1, ts[ts.length - 1] - ts[0]);
+    let grain = rough, top = 0;
+    for (const base2 of [rough, rough / 2, rough / 4]) {
+      for (let q = base2 * 0.985, step2 = base2 * base2 / (8 * span); q <= base2 * 1.015; q += step2) {
+        const r = onGrid(ts, q);
+        if (r > top) {
+          top = r;
+          grain = q;
+        }
+      }
+    }
+    if (top < 0.3) grain = rough;
+    return { beat: fold(grain), grain };
+  }
   var median = (a) => {
     const s = Array.from(a).sort((p, q) => p - q);
     return s.length ? s[s.length >> 1] : 0;
@@ -1122,24 +1193,27 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     let top = 0;
     for (let b = 0; b < PEAKS; b++) if (peaks[b] > top) top = peaks[b];
     if (top > 0) for (let b = 0; b < PEAKS; b++) peaks[b] /= top;
-    const beatLen = tempos.length ? median(tempos) : 0.5, bar = 4 * beatLen;
-    let sx = 0, sy = 0;
+    const fitted = fitBeat(hits, buffer.duration);
+    const beatLen = fitted ? fitted.beat : tempos.length ? median(tempos) : 0.5, grain = fitted ? fitted.grain : beatLen, bar = 4 * beatLen;
+    let sx = 0, sy = 0, first = -1;
     hits.forEach((h) => {
-      if (h.k === "kick") {
-        const g = 2 * Math.PI * (h.t % beatLen) / beatLen;
-        sx += Math.cos(g);
-        sy += Math.sin(g);
+      if (h.k === "kick" || h.k === "snare") {
+        if (first < 0 && h.k === "kick") first = h.t;
+        const g2 = 2 * Math.PI * (h.t % grain) / grain;
+        sx += Math.cos(g2);
+        sy += Math.sin(g2);
       }
     });
-    let phase = sx || sy ? Math.atan2(sy, sx) / (2 * Math.PI) * beatLen : 0;
-    if (phase < 0) phase += beatLen;
+    let phase = sx || sy ? Math.atan2(sy, sx) / (2 * Math.PI) * grain : 0;
+    if (phase < 0) phase += grain;
     const drops = hits.filter((h) => h.k === "drop").map((h) => h.t);
     const rises = drops.filter((d) => meanE(cum, FPS, n, d, d + 2) > 1.5 * meanE(cum, FPS, n, d - 4, d));
+    const marks = rises.length ? rises : first >= 0 ? [first] : [];
     let off = phase, bestFit = -Infinity;
-    for (let c = 0; c < 4; c++) {
-      const o = phase + c * beatLen;
+    for (let c = 0, slots = Math.max(1, Math.round(bar / grain)); c < slots; c++) {
+      const o = phase + c * grain;
       let fit = 0;
-      rises.forEach((d) => {
+      marks.forEach((d) => {
         fit += Math.cos(2 * Math.PI * (d - o) / bar);
       });
       if (fit > bestFit + 1e-9) {
@@ -1147,7 +1221,11 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
         off = o;
       }
     }
-    return { fps: FPS, n, env, period, cum, hits, peaks, drops, rises, duration: buffer.duration, beat: beatLen, bar, off: off % bar, bpm: tempos.length ? Math.round(60 / beatLen) : 0 };
+    return { fps: FPS, n, env, period, cum, hits, peaks, drops, rises, duration: buffer.duration, beat: beatLen, bar, off: off % bar, bpm: fitted || tempos.length ? Math.round(60 / beatLen) : 0 };
+  }
+  function snapBar(sc, t) {
+    const s = sc.off + Math.round((t - sc.off) / sc.bar) * sc.bar;
+    return s < 0 ? s + sc.bar : s;
   }
   function bestStart(sc, len) {
     if (!(len > 0) || len >= sc.duration - 0.05) return 0;
@@ -1318,6 +1396,112 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     pad.style.setProperty("--y", (HAND.v.zoom * 40).toFixed(2) + "%");
     pad.style.setProperty("--x2", (HAND.v.trails * 40).toFixed(2) + "%");
     pad.style.setProperty("--y2", (HAND.v.warp * 40).toFixed(2) + "%");
+  }
+
+  // src/songbar.js
+  var cv = null;
+  var g = null;
+  var audio = null;
+  var onPlace = null;
+  var W = 0;
+  var Hh = 0;
+  var ink = {};
+  var inkAge = 0;
+  var drag = null;
+  var duration = () => SONG.score ? SONG.score.duration : audio && isFinite(audio.duration) ? audio.duration : 0;
+  var whole = (d) => !(CLIP.len > 0) || CLIP.len >= d - 0.05;
+  function initSongBar(canvas3, audioEl, place) {
+    cv = canvas3;
+    g = cv.getContext("2d");
+    audio = audioEl;
+    onPlace = place;
+    const timeAt = (e) => {
+      const r = cv.getBoundingClientRect();
+      return r.width < 10 ? -1 : Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * duration();
+    };
+    const put = (t, done) => {
+      const d = duration();
+      if (whole(d)) {
+        onPlace(0, t, done);
+        return;
+      }
+      let s = Math.max(0, Math.min(d - CLIP.len, t));
+      if (SONG.score) {
+        s = snapBar(SONG.score, s);
+        while (s + CLIP.len > d + 1e-6) s -= SONG.score.bar;
+        s = Math.max(0, s);
+      }
+      onPlace(s, s, done);
+    };
+    cv.addEventListener("pointerdown", (e) => {
+      const t = timeAt(e), d = duration();
+      if (t < 0 || !d || SESSION.active) return;
+      try {
+        cv.setPointerCapture(e.pointerId);
+      } catch (err) {
+      }
+      const inside = !whole(d) && t >= CLIP.start && t <= CLIP.start + CLIP.len;
+      drag = { grab: inside ? t - CLIP.start : 0 };
+      if (!inside) put(t, false);
+    });
+    cv.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const t = timeAt(e);
+      if (t >= 0) put(t - drag.grab, false);
+    });
+    const up = (e) => {
+      if (!drag) return;
+      const t = timeAt(e);
+      const grab = drag.grab;
+      drag = null;
+      if (t >= 0) put(t - grab, true);
+    };
+    ["pointerup", "pointercancel"].forEach((k) => cv.addEventListener(k, up));
+  }
+  function drawSongBar() {
+    if (!cv) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+    if (w < 10 || h < 4) return;
+    if (w !== W || h !== Hh) {
+      cv.width = W = w;
+      cv.height = Hh = h;
+    }
+    if (--inkAge < 0) {
+      const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
+      ink = { strong: v("--ink") || "#0E0F11", soft: v("--ink-3") || "#5A5E66", line: v("--line") || "#CFCFC9", time: v("--rust") || "#B5420F", hand: v("--blue") || "#1F3BE2" };
+      inkAge = 90;
+    }
+    const d = duration(), mid = h / 2, step2 = 3 * dpr, bw = 2 * dpr, sc = SONG.score;
+    g.clearRect(0, 0, w, h);
+    if (!d) return;
+    const x = (t) => t / d * w, now = audio.currentTime || 0, full = whole(d);
+    const c0 = full ? 0 : CLIP.start, c1 = full ? d : CLIP.start + CLIP.len;
+    if (sc) {
+      const n = sc.peaks.length;
+      for (let px = 0; px < w; px += step2) {
+        let m = 0;
+        for (let b = Math.floor(px / w * n), e = Math.max(b + 1, Math.floor((px + step2) / w * n)); b < e && b < n; b++) if (sc.peaks[b] > m) m = sc.peaks[b];
+        const t = (px + bw / 2) / w * d, bh = Math.max(dpr, Math.pow(m, 0.8) * (h - 4 * dpr));
+        g.fillStyle = t >= c0 && t <= c1 ? t <= now ? ink.time : ink.strong : ink.line;
+        g.fillRect(px, mid - bh / 2, bw, bh);
+      }
+    } else {
+      g.fillStyle = ink.line;
+      g.fillRect(0, mid - dpr / 2, w, dpr);
+      if (SONG.state === "reading") {
+        g.fillStyle = ink.soft;
+        g.fillRect(0, mid - dpr, w * SONG.progress, 2 * dpr);
+      }
+      g.fillStyle = ink.time;
+      g.fillRect(x(c0), mid - dpr, Math.max(0, x(Math.min(now, c1)) - x(c0)), 2 * dpr);
+    }
+    if (!full) {
+      g.strokeStyle = ink.hand;
+      g.lineWidth = 1.5 * dpr;
+      g.strokeRect(x(c0) + g.lineWidth / 2, g.lineWidth / 2, Math.max(4, x(c1) - x(c0) - g.lineWidth), h - g.lineWidth);
+    }
+    g.fillStyle = ink.time;
+    g.fillRect(Math.round(x(now)) - dpr / 2, 0, 1.5 * dpr, h);
   }
 
   // src/gl/shaders.js
@@ -1893,9 +2077,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   }
 
   // src/audio/engine.js
-  var audio = new Audio();
-  audio.loop = true;
-  audio.preload = "auto";
+  var audio2 = new Audio();
+  audio2.loop = true;
+  audio2.preload = "auto";
   var on = { kick: null, snare: null, hat: null, drop: null };
   var actx = null;
   var analyser = null;
@@ -1913,7 +2097,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     }
     const AC = window.AudioContext || window.webkitAudioContext;
     actx = new AC();
-    const src = actx.createMediaElementSource(audio);
+    const src = actx.createMediaElementSource(audio2);
     analyser = actx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.3;
@@ -1931,8 +2115,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     mem.t = -1;
   }
   function analyse(dt) {
-    const playing = !audio.paused;
-    if (playing && SONG.score) followScore(SONG.score, audio.currentTime, dt, A, BEAT, on, mem);
+    const playing = !audio2.paused;
+    if (playing && SONG.score) followScore(SONG.score, audio2.currentTime, dt, A, BEAT, on, mem);
     else live.analyse(dt, G.clock, analyser, playing);
   }
 
@@ -1954,14 +2138,14 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
     const B = 0.5;
     function kick(t, len = 0.42) {
-      const o = ctx.createOscillator(), g = ctx.createGain();
+      const o = ctx.createOscillator(), g2 = ctx.createGain();
       o.frequency.setValueAtTime(150, t);
       o.frequency.exponentialRampToValueAtTime(42, t + 0.13);
-      g.gain.setValueAtTime(1e-4, t);
-      g.gain.exponentialRampToValueAtTime(1, t + 4e-3);
-      g.gain.exponentialRampToValueAtTime(1e-3, t + len);
-      o.connect(g);
-      g.connect(master);
+      g2.gain.setValueAtTime(1e-4, t);
+      g2.gain.exponentialRampToValueAtTime(1, t + 4e-3);
+      g2.gain.exponentialRampToValueAtTime(1e-3, t + len);
+      o.connect(g2);
+      g2.connect(master);
       o.start(t);
       o.stop(t + len + 0.03);
     }
@@ -1971,12 +2155,12 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       const f = ctx.createBiquadFilter();
       f.type = "highpass";
       f.frequency.value = 7500;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(v, t);
-      g.gain.exponentialRampToValueAtTime(1e-3, t + len);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(v, t);
+      g2.gain.exponentialRampToValueAtTime(1e-3, t + len);
       s.connect(f);
-      f.connect(g);
-      g.connect(master);
+      f.connect(g2);
+      g2.connect(master);
       s.start(t, Math.random() * 0.5);
       s.stop(t + len + 0.02);
     }
@@ -1987,16 +2171,16 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       f.type = "bandpass";
       f.frequency.value = 1700;
       f.Q.value = 0.9;
-      const g = ctx.createGain();
+      const g2 = ctx.createGain();
       [0, 0.012, 0.024].forEach((o) => {
-        g.gain.setValueAtTime(0.55, t + o);
-        g.gain.exponentialRampToValueAtTime(0.08, t + o + 0.01);
+        g2.gain.setValueAtTime(0.55, t + o);
+        g2.gain.exponentialRampToValueAtTime(0.08, t + o + 0.01);
       });
-      g.gain.setValueAtTime(0.4, t + 0.036);
-      g.gain.exponentialRampToValueAtTime(1e-3, t + 0.25);
+      g2.gain.setValueAtTime(0.4, t + 0.036);
+      g2.gain.exponentialRampToValueAtTime(1e-3, t + 0.25);
       s.connect(f);
-      f.connect(g);
-      g.connect(master);
+      f.connect(g2);
+      g2.connect(master);
       s.start(t, 0.2);
       s.stop(t + 0.3);
     }
@@ -2009,27 +2193,27 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       lp.Q.value = 6;
       lp.frequency.setValueAtTime(900, t);
       lp.frequency.exponentialRampToValueAtTime(140, t + d);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, t);
-      g.gain.exponentialRampToValueAtTime(0.32, t + 0.01);
-      g.gain.exponentialRampToValueAtTime(1e-3, t + d);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(1e-4, t);
+      g2.gain.exponentialRampToValueAtTime(0.32, t + 0.01);
+      g2.gain.exponentialRampToValueAtTime(1e-3, t + d);
       o.connect(lp);
-      lp.connect(g);
-      g.connect(master);
+      lp.connect(g2);
+      g2.connect(master);
       o.start(t);
       o.stop(t + d + 0.02);
     }
     function pad2(t, fs, d) {
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, t);
-      g.gain.exponentialRampToValueAtTime(0.06, t + 0.8);
-      g.gain.setValueAtTime(0.06, t + d - 0.6);
-      g.gain.exponentialRampToValueAtTime(1e-4, t + d + 0.4);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(1e-4, t);
+      g2.gain.exponentialRampToValueAtTime(0.06, t + 0.8);
+      g2.gain.setValueAtTime(0.06, t + d - 0.6);
+      g2.gain.exponentialRampToValueAtTime(1e-4, t + d + 0.4);
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
       lp.frequency.value = 1500;
-      lp.connect(g);
-      g.connect(master);
+      lp.connect(g2);
+      g2.connect(master);
       fs.forEach((f0) => [-7, 7].forEach((cents) => {
         const o = ctx.createOscillator();
         o.type = "sawtooth";
@@ -2044,12 +2228,12 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       const o = ctx.createOscillator();
       o.type = "triangle";
       o.frequency.value = f0;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, t);
-      g.gain.exponentialRampToValueAtTime(v, t + 5e-3);
-      g.gain.exponentialRampToValueAtTime(5e-4, t + 0.28);
-      o.connect(g);
-      g.connect(master);
+      const g2 = ctx.createGain();
+      g2.gain.setValueAtTime(1e-4, t);
+      g2.gain.exponentialRampToValueAtTime(v, t + 5e-3);
+      g2.gain.exponentialRampToValueAtTime(5e-4, t + 0.28);
+      o.connect(g2);
+      g2.connect(master);
       o.start(t);
       o.stop(t + 0.3);
     }
@@ -2118,50 +2302,50 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     const w = 1024, h = 1280, c = document.createElement("canvas");
     c.width = w;
     c.height = h;
-    const g = c.getContext("2d");
+    const g2 = c.getContext("2d");
     let seed = 7;
     const r = () => {
       seed = seed * 16807 % 2147483647;
       return seed / 2147483647;
     };
-    const bg = g.createLinearGradient(0, 0, w, h);
+    const bg = g2.createLinearGradient(0, 0, w, h);
     bg.addColorStop(0, "#1a0828");
     bg.addColorStop(0.5, "#0a1630");
     bg.addColorStop(1, "#2a120a");
-    g.fillStyle = bg;
-    g.fillRect(0, 0, w, h);
+    g2.fillStyle = bg;
+    g2.fillRect(0, 0, w, h);
     const pal = ["255,79,163", "255,170,60", "63,215,198", "122,92,255", "255,233,199", "255,96,60"];
-    g.globalCompositeOperation = "lighter";
+    g2.globalCompositeOperation = "lighter";
     for (let i = 0; i < 28; i++) {
       const x = r() * w, y = r() * h, rad = 90 + r() * 360, col = pal[i % pal.length];
-      const rg = g.createRadialGradient(x, y, 0, x, y, rad);
+      const rg = g2.createRadialGradient(x, y, 0, x, y, rad);
       rg.addColorStop(0, `rgba(${col},.55)`);
       rg.addColorStop(1, `rgba(${col},0)`);
-      g.fillStyle = rg;
-      g.fillRect(x - rad, y - rad, 2 * rad, 2 * rad);
+      g2.fillStyle = rg;
+      g2.fillRect(x - rad, y - rad, 2 * rad, 2 * rad);
     }
-    g.globalCompositeOperation = "source-over";
-    g.lineCap = "round";
+    g2.globalCompositeOperation = "source-over";
+    g2.lineCap = "round";
     for (let j = 0; j < 70; j++) {
       let px = r() * w, py = r() * h;
-      g.beginPath();
-      g.moveTo(px, py);
+      g2.beginPath();
+      g2.moveTo(px, py);
       for (let k = 0; k < 3; k++) {
         const c1x = px + (r() - 0.5) * 500, c1y = py + (r() - 0.5) * 500, c2x = px + (r() - 0.5) * 500, c2y = py + (r() - 0.5) * 500;
         px += (r() - 0.5) * 400;
         py += (r() - 0.5) * 400;
-        g.bezierCurveTo(c1x, c1y, c2x, c2y, px, py);
+        g2.bezierCurveTo(c1x, c1y, c2x, c2y, px, py);
       }
-      g.strokeStyle = r() < 0.45 ? `rgba(8,5,14,${0.5 + r() * 0.4})` : `rgba(${pal[Math.floor(r() * pal.length)]},${0.5 + r() * 0.5})`;
-      g.lineWidth = 1.5 + r() * 12;
-      g.stroke();
+      g2.strokeStyle = r() < 0.45 ? `rgba(8,5,14,${0.5 + r() * 0.4})` : `rgba(${pal[Math.floor(r() * pal.length)]},${0.5 + r() * 0.5})`;
+      g2.lineWidth = 1.5 + r() * 12;
+      g2.stroke();
     }
     for (let m = 0; m < 50; m++) {
-      g.beginPath();
-      g.arc(r() * w, r() * h, 4 + r() * 40, 0, Math.PI * 2);
-      g.strokeStyle = `rgba(255,240,220,${0.3 + r() * 0.5})`;
-      g.lineWidth = 1 + r() * 4;
-      g.stroke();
+      g2.beginPath();
+      g2.arc(r() * w, r() * h, 4 + r() * 40, 0, Math.PI * 2);
+      g2.strokeStyle = `rgba(255,240,220,${0.3 + r() * 0.5})`;
+      g2.lineWidth = 1 + r() * 4;
+      g2.stroke();
     }
     return c;
   }
@@ -2178,9 +2362,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     c.width = c.height = N;
     let data;
     try {
-      const g = c.getContext("2d", { willReadFrequently: true });
-      g.drawImage(src, 0, 0, N, N);
-      data = g.getImageData(0, 0, N, N).data;
+      const g2 = c.getContext("2d", { willReadFrequently: true });
+      g2.drawImage(src, 0, 0, N, N);
+      data = g2.getImageData(0, 0, N, N).data;
     } catch (e) {
       return null;
     }
@@ -2496,6 +2680,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       "blends",
       "overfx",
       "img2Clear",
+      "songWave",
+      "bestBtn",
       "lKick",
       "lSnare",
       "lHat",
@@ -2616,8 +2802,10 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     Object.keys(LENS).forEach((v) => addBtn(el.lens, v, v, () => {
       if (SESSION.active) return;
       OUT.len = v;
+      H.lengthChanged();
       syncExport();
     }));
+    el.bestBtn.addEventListener("click", () => H.bestClip());
     CLIPS.forEach((n) => addBtn(el.clips, n, String(n), () => {
       if (SESSION.active) return;
       OUT.clips = n;
@@ -2828,11 +3016,12 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     if (!SESSION.active) {
       const len = OUT.len === "Full" ? "full track" : OUT.len;
       el.recLbl.textContent = OUT.clips > 1 ? `Record ${OUT.clips} clips \xB7 ${len}` : `Record ${len}`;
+      el.bestBtn.textContent = OUT.len === "Full" ? "Best" : "Best " + OUT.len;
       el.recMiniLbl.textContent = "Record " + (OUT.len === "Full" ? "full" : OUT.len);
     }
   }
   function lockExport(on2) {
-    [el.fmts, el.quals, el.lens, el.clips].forEach((g) => Array.prototype.forEach.call(g.children, (b) => {
+    [el.fmts, el.quals, el.lens, el.clips].forEach((g2) => Array.prototype.forEach.call(g2.children, (b) => {
       b.disabled = on2;
     }));
     el.scrub.disabled = on2;
@@ -2909,14 +3098,14 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     } });
   }
   function renderKept(fresh) {
-    [el.kept, el.miniKept].forEach((g) => {
-      g.textContent = "";
-      if (g === el.kept) {
-        const add = addBtn(g, "add", "Keep", keep, "kt add");
+    [el.kept, el.miniKept].forEach((g2) => {
+      g2.textContent = "";
+      if (g2 === el.kept) {
+        const add = addBtn(g2, "add", "Keep", keep, "kt add");
         add.insertAdjacentHTML("afterbegin", '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.6"/></svg>');
         add.setAttribute("aria-label", "Keep this look");
       }
-      KEPT.forEach((k, i) => g.appendChild(keptTile(k, KEPT.length - i, k.id === fresh)));
+      KEPT.forEach((k, i) => g2.appendChild(keptTile(k, KEPT.length - i, k.id === fresh)));
     });
     el.miniKept.hidden = !KEPT.length;
     el.keptNote.textContent = KEPT.length ? "Tap one to bring it back. Hold to remove it. Looks are kept in this browser." : "Keep a look and it waits here with its direction, mode, colour, Beat, Pump and Flow, ready for any picture.";
@@ -3052,11 +3241,11 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     }
   }
   function drawThumb(src, w, h, canvas3) {
-    const g = (canvas3 || el.thumb).getContext("2d"), s = Math.min(w, h);
-    g.clearRect(0, 0, 96, 96);
-    g.drawImage(src, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 96, 96);
+    const g2 = (canvas3 || el.thumb).getContext("2d"), s = Math.min(w, h);
+    g2.clearRect(0, 0, 96, 96);
+    g2.drawImage(src, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 96, 96);
   }
-  function updateHUD(audio2, scrubbing2) {
+  function updateHUD(audio3, scrubbing2) {
     el.mLow.style.transform = "scaleX(" + clamp3(A.low * V.flow).toFixed(3) + ")";
     el.mMid.style.transform = "scaleX(" + clamp3(A.mid * V.flow).toFixed(3) + ")";
     el.mHigh.style.transform = "scaleX(" + clamp3(A.high * V.flow).toFixed(3) + ")";
@@ -3065,10 +3254,10 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     el.lHat.style.opacity = (0.15 + 0.85 * A.hat).toFixed(2);
     el.lDrop.style.opacity = (0.15 + 0.85 * A.drop).toFixed(2);
     el.bpm.textContent = BEAT.bpm ? "\u2248 " + BEAT.bpm + " BPM" : "\u2014 BPM";
-    if (isFinite(audio2.duration) && audio2.duration > 0) {
-      el.tCur.textContent = fmt(audio2.currentTime);
+    if (isFinite(audio3.duration) && audio3.duration > 0) {
+      el.tCur.textContent = fmt(audio3.currentTime);
       if (!scrubbing2) {
-        el.scrub.value = Math.round(audio2.currentTime / audio2.duration * 1e3);
+        el.scrub.value = Math.round(audio3.currentTime / audio3.duration * 1e3);
         setFill(el.scrub);
       }
     }
@@ -3289,8 +3478,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   var slow = 0;
   var fast = 0;
   var upBlockedUntil = 0;
-  function initView(cv) {
-    canvas = cv;
+  function initView(cv2) {
+    canvas = cv2;
   }
   function applySize() {
     const ar = FORMATS[OUT.fmt];
@@ -3365,8 +3554,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   var clipCount = 0;
   var stillWait = 0;
   var canRecord = () => !!(MIME && canvas2 && canvas2.captureStream);
-  function initRecord(cv) {
-    canvas2 = cv;
+  function initRecord(cv2) {
+    canvas2 = cv2;
   }
   function toggleRecord(soundReady2) {
     if (SESSION.active) {
@@ -3382,14 +3571,14 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       return;
     }
     if (LENS[OUT.len] === 0) {
-      if (!isFinite(audio.duration)) {
+      if (!isFinite(audio2.duration)) {
         toast("The track length is unknown, so pick 15s, 30s or 60s.");
         return;
       }
-      if (audio.currentTime > audio.duration - 1) audio.currentTime = 0;
-    }
+      audio2.currentTime = 0;
+    } else audio2.currentTime = CLIP.start;
     setOutputScale(1);
-    Object.assign(SESSION, { active: true, total: OUT.clips, done: 0, cancel: false, start: audio.currentTime });
+    Object.assign(SESSION, { active: true, total: OUT.clips, done: 0, cancel: false, start: audio2.currentTime });
     SESSION.stream = new MediaStream(canvas2.captureStream(30).getVideoTracks().concat(rs.getAudioTracks()));
     lockExport(true);
     try {
@@ -3408,10 +3597,10 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       applyLook(lookFor(G.dir, { change: true, big: true, full: true }), "user");
       S.seed = Math.random() * 100;
       S.drift += 3 + Math.random() * 9;
-      audio.currentTime = SESSION.start;
+      audio2.currentTime = SESSION.start;
     }
-    recLen = len === 0 ? audio.duration - SESSION.start : len;
-    audio.loop = len !== 0;
+    recLen = len === 0 ? audio2.duration - SESSION.start : len;
+    audio2.loop = len !== 0;
     const opts = { mimeType: MIME, videoBitsPerSecond: G.W >= 1080 ? 14e6 : 8e6, audioBitsPerSecond: 192e3 };
     try {
       recorder = new MediaRecorder(SESSION.stream, opts);
@@ -3433,9 +3622,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     recT0 = 0;
     clipLabel = G.dir + (AUTO.on ? " \xB7 Auto" : " \xB7 " + MODES[P.mode]);
     setRecUI(true, SESSION.done + 1, SESSION.total);
-    audio.play().then(() => {
+    audio2.play().then(() => {
       if (!clipActive) {
-        audio.pause();
+        audio2.pause();
         return;
       }
       recT0 = performance.now();
@@ -3458,7 +3647,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       return;
     }
     clipActive = false;
-    audio.pause();
+    audio2.pause();
     if (recorder && recorder.state !== "inactive") recorder.stop();
     else onClipStop();
   }
@@ -3472,7 +3661,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   function endSession() {
     if (!SESSION.active) return;
     SESSION.active = false;
-    audio.loop = true;
+    audio2.loop = true;
     if (SESSION.stream) SESSION.stream.getVideoTracks().forEach((t) => t.stop());
     SESSION.stream = null;
     setRecUI(false);
@@ -3604,31 +3793,43 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       applySize,
       saveBlob,
       takeStill,
+      lengthChanged: () => placeClip(CLIP.start),
+      bestClip: () => {
+        if (SONG.score && !SESSION.active) {
+          placeClip(bestStart(SONG.score, LENS[OUT.len] || 0));
+          audio2.currentTime = CLIP.start;
+        }
+      },
       toggleRecord: () => toggleRecord(soundReady),
       soundReady: () => soundReady,
       canRecord,
-      isPlaying: () => !audio.paused,
+      isPlaying: () => !audio2.paused,
       ext: MIME ? EXT : ""
     });
     if (!window.MediaRecorder || !canvas3.captureStream) {
       el.recNote.textContent = "Recording needs a browser that can capture video, such as Chrome, Edge, Firefox or Safari 14.1 and later.";
     }
+    initSongBar(el.songWave, audio2, (start, seek, done) => {
+      if (SESSION.active) return;
+      CLIP.start = start;
+      if (done && isFinite(audio2.duration)) audio2.currentTime = Math.min(audio2.duration, seek);
+    });
     on.kick = () => {
       reactKick();
       autoOnKick();
     };
     on.snare = reactSnare;
     on.drop = autoOnDrop;
-    audio.addEventListener("play", () => setPlaying(true));
-    audio.addEventListener("pause", () => setPlaying(false));
-    audio.addEventListener("ended", () => {
+    audio2.addEventListener("play", () => setPlaying(true));
+    audio2.addEventListener("pause", () => setPlaying(false));
+    audio2.addEventListener("ended", () => {
       if (isClipActive()) stopClip();
     });
-    audio.addEventListener("error", () => {
-      if (audio.src) toast("That sound could not be played. Try an MP3, WAV or M4A file.");
+    audio2.addEventListener("error", () => {
+      if (audio2.src) toast("That sound could not be played. Try an MP3, WAV or M4A file.");
     });
-    audio.addEventListener("loadedmetadata", () => {
-      el.tDur.textContent = fmtT(audio.duration);
+    audio2.addEventListener("loadedmetadata", () => {
+      el.tDur.textContent = fmtT(audio2.duration);
     });
     el.scrub.addEventListener("pointerdown", () => {
       scrubbing = true;
@@ -3641,7 +3842,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     });
     el.scrub.addEventListener("input", () => {
       setFill(el.scrub);
-      if (isFinite(audio.duration) && !SESSION.active) audio.currentTime = el.scrub.value / 1e3 * audio.duration;
+      if (isFinite(audio2.duration) && !SESSION.active) audio2.currentTime = el.scrub.value / 1e3 * audio2.duration;
     });
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && SESSION.active) {
@@ -3672,8 +3873,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   function togglePlay() {
     if (!soundReady || SESSION.active) return;
     ensureCtx();
-    if (audio.paused) audio.play().catch(() => toast("Playback was blocked. Tap Play again."));
-    else audio.pause();
+    if (audio2.paused) audio2.play().catch(() => toast("Playback was blocked. Tap Play again."));
+    else audio2.pause();
   }
   var isVideo = (f) => (f.type || "").indexOf("video/") === 0 || /\.(mp4|mov|m4v|webm)$/i.test(f.name || "");
   function loadPictureFile(file) {
@@ -3710,7 +3911,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     video.load();
     const p = video.play();
     if (p && p.then) p.then(() => {
-      if (audio.paused) video.pause();
+      if (audio2.paused) video.pause();
     }).catch(() => {
     });
   }
@@ -3721,7 +3922,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       if (p && p.catch) p.catch(() => {
       });
     } else if (!playing && !video.paused) video.pause();
-    const want = audio.currentTime % video.duration;
+    const want = audio2.currentTime % video.duration;
     if (!video.seeking && Math.abs(video.currentTime - want) > (playing ? 0.3 : 0.05)) video.currentTime = want;
   }
   var NO_OVER = "None. Lay one over the first.";
@@ -3766,6 +3967,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   async function readSong(blob) {
     const my = ++songSeq;
     Object.assign(SONG, { state: "reading", progress: 0, buffer: null, score: null });
+    el.bestBtn.disabled = true;
     try {
       const buffer = await decodeTrack(await blob.arrayBuffer());
       if (my !== songSeq) return;
@@ -3775,13 +3977,15 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       });
       if (my !== songSeq) return;
       Object.assign(SONG, { state: "ready", progress: 1, buffer, score });
-      placeClip(bestStart(score, CLIP.len));
+      placeClip(bestStart(score, LENS[OUT.len] || 0));
+      el.bestBtn.disabled = false;
+      if (audio2.paused) audio2.currentTime = CLIP.start;
     } catch (e) {
       if (my === songSeq) Object.assign(SONG, { state: "failed", buffer: null, score: null });
     }
   }
   function placeClip(start) {
-    const dur = SONG.score ? SONG.score.duration : audio.duration;
+    const dur = SONG.score ? SONG.score.duration : audio2.duration;
     CLIP.len = LENS[OUT.len] || 0;
     if (!isFinite(dur) || !(CLIP.len > 0) || CLIP.len >= dur) {
       CLIP.start = 0;
@@ -3791,17 +3995,17 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   }
   function setSound(blob, name) {
     const url = URL.createObjectURL(blob);
-    const wasPlaying = !audio.paused;
+    const wasPlaying = !audio2.paused;
     if (soundURL && soundURL !== url) URL.revokeObjectURL(soundURL);
     soundURL = url;
-    audio.src = url;
-    audio.load();
+    audio2.src = url;
+    audio2.load();
     soundReady = true;
     resetAnalysis();
     setSoundReady(name);
     CLIP.start = 0;
     readSong(blob);
-    if (wasPlaying) audio.play().catch(() => {
+    if (wasPlaying) audio2.play().catch(() => {
     });
   }
   function loadSoundFile(file) {
@@ -3820,15 +4024,20 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   function frame(now) {
     const dt = Math.min(0.05, Math.max(1e-3, (now - prevNow) / 1e3));
     prevNow = now;
-    const playing = !audio.paused;
+    const playing = !audio2.paused;
     if (playing) G.clock += dt;
+    if (playing && !SESSION.active && CLIP.len > 0 && isFinite(audio2.duration) && CLIP.len < audio2.duration - 0.05) {
+      const end = Math.min(audio2.duration, CLIP.start + CLIP.len);
+      if (audio2.currentTime >= end - 0.02 || audio2.currentTime < CLIP.start - 0.05) audio2.currentTime = CLIP.start;
+    }
     analyse(dt);
     syncVideo(playing);
     autoTick(playing);
     handTick(dt);
     step(dt);
     render(now);
-    updateHUD(audio, scrubbing);
+    updateHUD(audio2, scrubbing);
+    drawSongBar();
     recordTick(now);
     adaptQuality(dt, now, SESSION.active);
     requestAnimationFrame(frame);

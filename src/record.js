@@ -2,7 +2,7 @@
 // A session records 1, 3 or 5 clips; clips after the first replay the same section with a new look.
 // A still image is the canvas itself, saved as a PNG at the full output size.
 import { LENS, MODES } from './config.js';
-import { G, P, S, AUTO, OUT, SESSION } from './state.js';
+import { G, P, S, AUTO, OUT, SESSION, CLIP } from './state.js';
 import { audio, ensureCtx, recordStream } from './audio/engine.js';
 import { lookFor, applyLook } from './auto.js';
 import { el, toast, lockExport, setRecUI, addResultCard } from './ui.js';
@@ -32,8 +32,8 @@ export function toggleRecord(soundReady) {
   if (!rs) { toast('This browser cannot capture the sound for the video.'); return; }
   if (LENS[OUT.len] === 0) {
     if (!isFinite(audio.duration)) { toast('The track length is unknown, so pick 15s, 30s or 60s.'); return; }
-    if (audio.currentTime > audio.duration - 1) audio.currentTime = 0;
-  }
+    audio.currentTime = 0;
+  } else audio.currentTime = CLIP.start;      // the clip shown on the song bar is what gets recorded
   setOutputScale(1);   // always record at full output resolution
   Object.assign(SESSION, { active: true, total: OUT.clips, done: 0, cancel: false, start: audio.currentTime });
   SESSION.stream = new MediaStream(canvas.captureStream(30).getVideoTracks().concat(rs.getAudioTracks()));
