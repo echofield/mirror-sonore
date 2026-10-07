@@ -32,15 +32,24 @@ export const HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0,
 export const PUMP = { style: 'Punch', len: '1/8' };
 
 // Audio analysis results: envelopes (low/mid/high/lvl) and decaying hit impulses.
-export const A = {
+// (newA and newBeat also make the private memory a whole-track scan needs, see audio/score.js)
+export const newA = () => ({
   low: 0, mid: 0, high: 0, lvl: 0,
   kick: 0, snare: 0, hat: 0, drop: 0, cut: 0,
   eFast: 0, eSlow: 0, lastDrop: -99, playT: 0,
   pk: [.2, .2, .2, .2],
   wave: 0, wpk: .1   // the sound's own level (RMS of the waveform), shaped for the Wave mode, and its running peak
-};
+});
+export const A = newA();
 
-export const BEAT = { iois: [], last: -9, period: .5, bpm: 0 };
+export const newBeat = () => ({ iois: [], last: -9, period: .5, bpm: 0 });
+export const BEAT = newBeat();
+
+// The song, read ahead of time (audio/score.js). state: none | reading | ready | failed.
+// buffer is the decoded sound (kept for rendering clips), score what the detectors found in it.
+export const SONG = { state: 'none', progress: 0, buffer: null, score: null };
+// The clip: the stretch of the song that plays in a loop and gets recorded. len 0 means the whole track.
+export const CLIP = { start: 0, len: 15 };
 export const AUTO = { on: true, bars: 4, armed: false, armedAt: 0, phraseStart: 0, trans: 'Morph' };
 export const OUT = { fmt: '9:16', q: '720p', len: '15s', clips: 1 };
 export const SESSION = { active: false, total: 1, done: 0, start: 0, cancel: false, stream: null };

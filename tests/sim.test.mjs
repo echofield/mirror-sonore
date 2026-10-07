@@ -272,6 +272,37 @@ const lastCard = $('results').lastChild;
 check($('results').children.length === 5 && !!lastCard.querySelector('img') && /\.png$/.test(lastCard.querySelector('b').textContent)
   && lastCard.querySelector('.savebtn').textContent === 'Save image', 'Image saves a still as a PNG card: ' + lastCard.querySelector('small').textContent);
 check(!!$('toast').querySelector('button'), 'the still can be saved from the message');
+// the song read ahead: a real 32 s signal (a groove, a breakdown from 8 s, the drop at 12 s, then the same
+// again) is decoded, scanned by the detectors through the FFT, and followed while it plays
+const SR = 44100, DUR = 32, pcm = new Float32Array(SR * DUR);
+{ let seed = 7, prevN = 0; const noise = () => { seed = (seed * 16807) % 2147483647; return seed / 1073741823.5 - 1; };
+  for (let i = 0; i < pcm.length; i++) {
+    const t = i / SR, tt = t % 16, brk = tt >= 8 && tt < 12, n = noise();
+    const kick = brk ? 0 : Math.sin(2 * Math.PI * 55 * (tt % .5)) * Math.exp(-(tt % .5) / .07);
+    const snare = brk ? 0 : n * .5 * Math.exp(-((tt + .5) % 1) / .06);
+    const hat = (n - prevN) * .25 * Math.exp(-((tt + .25) % .5) / .03); prevN = n;
+    pcm[i] = .8 * kick + snare + hat + .08 * Math.sin(2 * Math.PI * 220 * t);
+  } }
+w.OfflineAudioContext = class { decodeAudioData(ab, ok) { ok({ sampleRate: SR, length: pcm.length, duration: DUR, numberOfChannels: 1, getChannelData: () => pcm }); } };
+audioEl[0].duration = DUR; audioEl[0].currentTime = 0;
+const track = new w.File(['x'], 'track.wav', { type: 'audio/wav' });
+if (!track.arrayBuffer) track.arrayBuffer = async () => new ArrayBuffer(8);
+pick('sndIn', track);
+for (let i = 0; i < 400 && !/ready|failed/.test(w.__ms.SONG.state); i++) await tick();
+const sc = w.__ms.SONG.score || { hits: [], drops: [], rises: [] };
+const kicksIn = sc.hits.filter(h => h.k === 'kick').length;
+check(w.__ms.SONG.state === 'ready' && sc.bpm >= 118 && sc.bpm <= 122 && kicksIn > 36,
+  `the song is read ahead: ${w.__ms.SONG.state}, ${sc.bpm} BPM, ${kicksIn} kicks, ${sc.hits.length} hits in ${DUR} s`);
+check(sc.rises.length === 2 && sc.rises.every(d => Math.abs((d % 16) - 12.1) < .6), 'the two real drops are told from the hits inside the groove: rises at ' + sc.rises.map(d => d.toFixed(1)).join(', ') + ' s, of ' + sc.drops.length + ' drops');
+const offBar = Math.abs(((sc.off + sc.bar / 2) % sc.bar) - sc.bar / 2);
+check(Math.abs(sc.bar - 2) < .05 && offBar < .15, `bars are found: ${sc.bar.toFixed(2)} s long, the first one ${sc.off.toFixed(2)} s in`);
+const cs = w.__ms.CLIP.start, onBar = Math.abs((((cs - sc.off) % sc.bar) + sc.bar + sc.bar / 2) % sc.bar - sc.bar / 2);
+check(cs > 3 && cs < 10.3 && onBar < .02, `the clip is placed on a bar with the drop inside it: starts at ${cs.toFixed(2)} s`);
+if (audioEl[0].paused) click($('playBtn'));
+const k0 = counts.k, d0 = counts.d; audioEl[0].currentTime = 9.5;
+await run(5);
+check(counts.k - k0 >= 4 && counts.d - d0 >= 1 && /1(19|20|21) BPM/.test($('bpm').textContent),
+  `playing follows the score: ${counts.k - k0} kicks and ${counts.d - d0} drop from 9.5 s to 14.5 s, ${$('bpm').textContent}`);
 check(errors.length === 0, 'no runtime errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 console.log(failures ? failures + ' check(s) failed' : 'all checks passed');
 process.exit(failures ? 1 : 0);

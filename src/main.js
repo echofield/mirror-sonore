@@ -1,5 +1,7 @@
 // Boot and the frame loop. Order per frame: clock → analysis → Auto → mapping → render → HUD → recording.
-import { G, P, A, SESSION, U, V, S, PUMP, BEAT, WV, HAND } from './state.js';
+import { G, P, A, SESSION, OUT, U, V, S, PUMP, BEAT, WV, HAND, SONG, CLIP } from './state.js';
+import { decodeTrack, scanTrack, bestStart } from './audio/score.js';
+import { LENS } from './config.js';
 import { handTick } from './hands.js';
 import { initRenderer, uploadImage, uploadOver, useVideo, render } from './gl/renderer.js';
 import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
@@ -70,7 +72,7 @@ function boot() {
   syncExport();
   requestAnimationFrame(frame);
   makeSampleLoop().then(blob => {
-    if (!soundReady) setSound(URL.createObjectURL(blob), 'Sample loop · 120 BPM');
+    if (!soundReady) setSound(blob, 'Sample loop · 120 BPM');
   }).catch(() => {
     el.sndName.textContent = 'Choose a sound to start';
     el.bigPlayLbl.textContent = 'Choose a sound to start';
@@ -144,7 +146,34 @@ function loadImageFile(file) {
   img.onerror = () => { URL.revokeObjectURL(url); toast('That image could not be opened. Try a JPG, PNG or WebP.'); };
   img.src = url;
 }
-function setSound(url, name) {
+// Read the whole song ahead: decode it, then let the detectors go through it once (audio/score.js).
+// Until that is done, and whenever it cannot be done, the sound is listened to as it plays.
+let songSeq = 0;
+async function readSong(blob) {
+  const my = ++songSeq;
+  Object.assign(SONG, { state: 'reading', progress: 0, buffer: null, score: null });
+  try {
+    const buffer = await decodeTrack(await blob.arrayBuffer());
+    if (my !== songSeq) return;
+    if (!(buffer.duration > 0) || buffer.duration > 900) throw new Error('too long to read ahead');
+    const score = await scanTrack(buffer, p => { if (my === songSeq) SONG.progress = p; });
+    if (my !== songSeq) return;
+    Object.assign(SONG, { state: 'ready', progress: 1, buffer, score });
+    placeClip(bestStart(score, CLIP.len));
+  } catch (e) {
+    if (my === songSeq) Object.assign(SONG, { state: 'failed', buffer: null, score: null });
+  }
+}
+// The clip follows the Length chosen under Export, and stays inside the track.
+function placeClip(start) {
+  const dur = SONG.score ? SONG.score.duration : audio.duration;
+  CLIP.len = LENS[OUT.len] || 0;
+  if (!isFinite(dur) || !(CLIP.len > 0) || CLIP.len >= dur) { CLIP.start = 0; return; }
+  CLIP.start = Math.max(0, Math.min(dur - CLIP.len, start));
+}
+
+function setSound(blob, name) {
+  const url = URL.createObjectURL(blob);
   const wasPlaying = !audio.paused;
   if (soundURL && soundURL !== url) URL.revokeObjectURL(soundURL);
   soundURL = url;
@@ -152,9 +181,11 @@ function setSound(url, name) {
   soundReady = true;
   resetAnalysis();
   setSoundReady(name);
+  CLIP.start = 0;
+  readSong(blob);
   if (wasPlaying) audio.play().catch(() => {});
 }
-function loadSoundFile(file) { setSound(URL.createObjectURL(file), file.name || 'Sound'); }
+function loadSoundFile(file) { setSound(file, file.name || 'Sound'); }
 function routeFile(f) {
   const t = f.type || '', n = (f.name || '').toLowerCase();
   if (t.indexOf('image/') === 0 || /\.(png|jpe?g|webp|gif|avif|bmp)$/.test(n)) loadImageFile(f);
@@ -181,5 +212,5 @@ function frame(now) {
 }
 
 // Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
-if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND };
+if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND, SONG, CLIP };
 boot();

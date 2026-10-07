@@ -778,7 +778,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
   var WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N * 4) };
   var HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0, zoom: 0, warp: 0, trails: 0 }, latch: false, active: false };
   var PUMP = { style: "Punch", len: "1/8" };
-  var A = {
+  var newA = () => ({
     low: 0,
     mid: 0,
     high: 0,
@@ -796,8 +796,12 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     wave: 0,
     wpk: 0.1
     // the sound's own level (RMS of the waveform), shaped for the Wave mode, and its running peak
-  };
-  var BEAT = { iois: [], last: -9, period: 0.5, bpm: 0 };
+  });
+  var A = newA();
+  var newBeat = () => ({ iois: [], last: -9, period: 0.5, bpm: 0 });
+  var BEAT = newBeat();
+  var SONG = { state: "none", progress: 0, buffer: null, score: null };
+  var CLIP = { start: 0, len: 15 };
   var AUTO = { on: true, bars: 4, armed: false, armedAt: 0, phraseStart: 0, trans: "Morph" };
   var OUT = { fmt: "9:16", q: "720p", len: "15s", clips: 1 };
   var SESSION = { active: false, total: 1, done: 0, start: 0, cancel: false, stream: null };
@@ -838,6 +842,365 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     recLen: 0
     // position inside the clip being recorded (-1 when not recording)
   };
+
+  // src/audio/detect.js
+  var clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
+  function makeDetectors(A2, BEAT2, on2) {
+    let fbuf = null, tbuf = null, prevBuf = null, RG = null;
+    const det = (gap, k) => ({ mean: 0, dev: 0, last: -9, gap, k });
+    const DET = { kick: det(0.17, 1.6), snare: det(0.13, 1.9), hat: det(0.06, 1.5) };
+    const avg = (r) => {
+      let s = 0;
+      for (let i = r[0]; i <= r[1]; i++) s += fbuf[i];
+      return s / ((r[1] - r[0] + 1) * 255);
+    };
+    const flux = (r) => {
+      let s = 0;
+      for (let i = r[0]; i <= r[1]; i++) {
+        const d = fbuf[i] - prevBuf[i];
+        if (d > 0) s += d;
+      }
+      return s / ((r[1] - r[0] + 1) * 255);
+    };
+    function detect(d, x, t, dt) {
+      const a = 1 - Math.exp(-dt / 0.9);
+      const hit = x > d.mean + d.k * d.dev + 0.01 && t - d.last > d.gap;
+      if (hit) d.last = t;
+      d.mean += (x - d.mean) * a;
+      d.dev += (Math.abs(x - d.mean) - d.dev) * a;
+      return hit;
+    }
+    function trackTempo(t) {
+      const ioi = t - BEAT2.last;
+      BEAT2.last = t;
+      if (ioi <= 0.24 || ioi >= 1.6) return;
+      BEAT2.iois.push(ioi);
+      if (BEAT2.iois.length > 16) BEAT2.iois.shift();
+      if (BEAT2.iois.length < 4) return;
+      let m = BEAT2.iois.slice().sort((a, b) => a - b)[Math.floor(BEAT2.iois.length / 2)];
+      while (m > 0.75) m /= 2;
+      while (m < 0.35) m *= 2;
+      BEAT2.period = m;
+      BEAT2.bpm = Math.round(60 / m);
+    }
+    return {
+      // The source's sample rate and FFT size decide which bins make up each band.
+      configure(sampleRate, fftSize) {
+        const bins = fftSize / 2, hz = sampleRate / fftSize;
+        fbuf = new Uint8Array(bins);
+        tbuf = new Uint8Array(fftSize);
+        prevBuf = new Uint8Array(bins);
+        const idx = (lo, hi) => [Math.max(1, Math.floor(lo / hz)), Math.min(bins - 1, Math.ceil(hi / hz))];
+        RG = {
+          low: idx(35, 130),
+          mid: idx(300, 2500),
+          high: idx(5e3, 14e3),
+          all: idx(35, 14e3),
+          kick: idx(35, 150),
+          snare: idx(1e3, 4500),
+          hat: idx(7e3, 15e3)
+        };
+      },
+      reset() {
+        BEAT2.iois = [];
+        BEAT2.bpm = 0;
+        BEAT2.last = -9;
+        A2.playT = 0;
+        A2.eSlow = 0;
+        A2.eFast = 0;
+      },
+      // One step. src is the sound; t the clock in seconds. With playing false every envelope falls.
+      analyse(dt, t, src, playing) {
+        let lo = 0, mi = 0, hi = 0, lv = 0, wv = 0;
+        playing = !!(playing && src && RG);
+        if (playing) {
+          src.getByteFrequencyData(fbuf);
+          const raw = [avg(RG.low), avg(RG.mid), avg(RG.high), avg(RG.all)];
+          for (let i = 0; i < 4; i++) {
+            A2.pk[i] = Math.max(raw[i], A2.pk[i] - dt * 0.04, 0.12);
+            raw[i] /= A2.pk[i];
+          }
+          lo = clamp((raw[0] - 0.35) / 0.65);
+          mi = clamp((raw[1] - 0.25) / 0.75);
+          hi = clamp((raw[2] - 0.2) / 0.8);
+          lv = clamp(raw[3]);
+          if (src.getByteTimeDomainData) {
+            src.getByteTimeDomainData(tbuf);
+            let s = 0;
+            for (let i = 0; i < tbuf.length; i += 4) {
+              const v = (tbuf[i] - 128) / 128;
+              s += v * v;
+            }
+            const rms = Math.sqrt(s * 4 / tbuf.length);
+            A2.wpk = Math.max(rms, A2.wpk - dt * 0.03, 0.04);
+            wv = Math.pow(clamp((rms / A2.wpk - 0.2) / 0.8), 1.25);
+          } else wv = lv;
+          if (detect(DET.kick, flux(RG.kick), t, dt) && raw[0] > 0.45) {
+            A2.kick = 1;
+            trackTempo(t);
+            on2.kick && on2.kick();
+          }
+          if (detect(DET.snare, flux(RG.snare), t, dt)) {
+            A2.snare = 1;
+            on2.snare && on2.snare();
+          }
+          if (detect(DET.hat, flux(RG.hat), t, dt)) {
+            A2.hat = 1;
+            on2.hat && on2.hat();
+          }
+          prevBuf.set(fbuf);
+          A2.playT += dt;
+        }
+        const env = (cur, target, att, rel) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? att : rel)));
+        A2.low = env(A2.low, lo, 0.012, 0.14);
+        A2.mid = env(A2.mid, mi, 0.04, 0.3);
+        A2.high = env(A2.high, hi, 0.01, 0.1);
+        A2.lvl = env(A2.lvl, lv, 0.08, 0.6);
+        A2.wave = env(A2.wave, wv, 8e-3, 0.08);
+        if (playing) {
+          const dv = 0.6 * lo + 0.4 * lv;
+          A2.eFast = env(A2.eFast, dv, 0.15, 0.25);
+          A2.eSlow = A2.playT < 4 ? A2.eFast : env(A2.eSlow, dv, 3, 3);
+          if (A2.playT > 4 && A2.eSlow > 0.1 && A2.eFast > A2.eSlow * 1.35 && A2.eFast > 0.3 && t - A2.lastDrop > 6) {
+            A2.lastDrop = t;
+            A2.drop = 1;
+            on2.drop && on2.drop();
+          }
+        }
+        A2.kick *= Math.exp(-dt * 8);
+        A2.snare *= Math.exp(-dt * 10);
+        A2.hat *= Math.exp(-dt * 16);
+        A2.drop *= Math.exp(-dt * 2.5);
+        A2.cut *= Math.exp(-dt * 5);
+      }
+    };
+  }
+
+  // src/audio/score.js
+  var FFT = 2048;
+  var FPS = 60;
+  var PEAKS = 1200;
+  var TAU = 0.3;
+  var DB_MIN = -100;
+  var DB_MAX = -30;
+  var KINDS = ["kick", "snare", "hat", "drop"];
+  function decodeTrack(arrayBuffer) {
+    const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OC) return Promise.reject(new Error("no decoder"));
+    const ctx = new OC(2, 2, 44100);
+    return new Promise((ok, no) => {
+      const p = ctx.decodeAudioData(arrayBuffer, ok, no);
+      if (p && p.catch) p.catch(no);
+    });
+  }
+  var COS = new Float32Array(FFT / 2);
+  var SIN = new Float32Array(FFT / 2);
+  var REV = new Uint16Array(FFT);
+  var WIN = new Float32Array(FFT);
+  for (let i = 0; i < FFT / 2; i++) {
+    COS[i] = Math.cos(2 * Math.PI * i / FFT);
+    SIN[i] = -Math.sin(2 * Math.PI * i / FFT);
+  }
+  for (let i = 0, bits = Math.log2(FFT); i < FFT; i++) {
+    let r = 0;
+    for (let b = 0; b < bits; b++) r |= (i >> b & 1) << bits - 1 - b;
+    REV[i] = r;
+  }
+  for (let i = 0; i < FFT; i++) WIN[i] = 0.42 - 0.5 * Math.cos(2 * Math.PI * i / FFT) + 0.08 * Math.cos(4 * Math.PI * i / FFT);
+  function fft(re, im) {
+    for (let i = 0; i < FFT; i++) {
+      const j = REV[i];
+      if (j > i) {
+        let t = re[i];
+        re[i] = re[j];
+        re[j] = t;
+        t = im[i];
+        im[i] = im[j];
+        im[j] = t;
+      }
+    }
+    for (let len = 2; len <= FFT; len <<= 1) {
+      const half = len >> 1, step2 = FFT / len;
+      for (let i = 0; i < FFT; i += len) {
+        for (let k = 0, w = 0; k < half; k++, w += step2) {
+          const a = i + k, b = a + half, vr = re[b] * COS[w] - im[b] * SIN[w], vi = re[b] * SIN[w] + im[b] * COS[w];
+          re[b] = re[a] - vr;
+          im[b] = im[a] - vi;
+          re[a] += vr;
+          im[a] += vi;
+        }
+      }
+    }
+  }
+  function makeReader(buffer) {
+    const sr = buffer.sampleRate, len = buffer.length, nch = Math.min(2, buffer.numberOfChannels);
+    const L = buffer.getChannelData(0), R = nch > 1 ? buffer.getChannelData(1) : L;
+    const re = new Float32Array(FFT), im = new Float32Array(FFT), smooth2 = new Float32Array(FFT / 2), x = new Float32Array(FFT);
+    let end = 0;
+    const load = () => {
+      for (let i = 0, s = end - FFT; i < FFT; i++, s++) x[i] = s >= 0 && s < len ? (L[s] + R[s]) * 0.5 : 0;
+    };
+    return {
+      fftSize: FFT,
+      frequencyBinCount: FFT / 2,
+      sampleRate: sr,
+      seek(t) {
+        end = Math.round(t * sr);
+      },
+      getByteTimeDomainData(arr) {
+        load();
+        for (let i = 0; i < FFT; i++) {
+          const v = 128 * (1 + x[i]);
+          arr[i] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
+      },
+      getByteFrequencyData(arr) {
+        load();
+        for (let i = 0; i < FFT; i++) {
+          re[i] = x[i] * WIN[i];
+          im[i] = 0;
+        }
+        fft(re, im);
+        for (let k = 0; k < FFT / 2; k++) {
+          smooth2[k] = TAU * smooth2[k] + (1 - TAU) * Math.hypot(re[k], im[k]) / FFT;
+          const v = 255 / (DB_MAX - DB_MIN) * (20 * Math.log10(smooth2[k] || 1e-12) - DB_MIN);
+          arr[k] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
+      }
+    };
+  }
+  var meanE = (cum, fps, n, a, b) => {
+    const i = Math.min(n, Math.max(0, Math.round(a * fps))), j = Math.min(n, Math.max(i + 1, Math.round(b * fps)));
+    return (cum[j] - cum[i]) / (j - i);
+  };
+  var median = (a) => {
+    const s = Array.from(a).sort((p, q) => p - q);
+    return s.length ? s[s.length >> 1] : 0;
+  };
+  var pause = () => new Promise((r) => setTimeout(r, 0));
+  async function scanTrack(buffer, onProgress) {
+    const n = Math.max(1, Math.ceil(buffer.duration * FPS)), dt = 1 / FPS;
+    const a = newA(), beat = newBeat(), hits = [];
+    let now = 0;
+    const on2 = {};
+    KINDS.forEach((k) => {
+      on2[k] = () => hits.push({ t: now, k });
+    });
+    const D = makeDetectors(a, beat, on2), R = makeReader(buffer);
+    D.configure(R.sampleRate, R.fftSize);
+    const env = new Float32Array((n + 1) * 5), period = new Float32Array(n + 1), cum = new Float64Array(n + 2), tempos = [];
+    for (let i = 0; i < n; i++) {
+      now = i * dt;
+      R.seek(now);
+      D.analyse(dt, now, R, true);
+      env[i * 5] = a.low;
+      env[i * 5 + 1] = a.mid;
+      env[i * 5 + 2] = a.high;
+      env[i * 5 + 3] = a.lvl;
+      env[i * 5 + 4] = a.wave;
+      period[i] = beat.period;
+      if (beat.bpm) tempos.push(beat.period);
+      cum[i + 1] = cum[i] + 0.5 * a.lvl + 0.5 * a.low;
+      if (i % 300 === 299) {
+        if (onProgress) onProgress(i / n);
+        await pause();
+      }
+    }
+    env.copyWithin(n * 5, (n - 1) * 5, n * 5);
+    period[n] = period[n - 1];
+    cum[n + 1] = cum[n];
+    const L = buffer.getChannelData(0), Rr = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : L, peaks = new Float32Array(PEAKS);
+    const per = buffer.length / PEAKS;
+    for (let b = 0; b < PEAKS; b++) {
+      let m = 0;
+      for (let s = Math.floor(b * per), e = Math.min(buffer.length, Math.floor((b + 1) * per)), st = Math.max(1, Math.floor(per / 400)); s < e; s += st) {
+        const v = Math.abs(L[s] + Rr[s]) * 0.5;
+        if (v > m) m = v;
+      }
+      peaks[b] = m;
+    }
+    let top = 0;
+    for (let b = 0; b < PEAKS; b++) if (peaks[b] > top) top = peaks[b];
+    if (top > 0) for (let b = 0; b < PEAKS; b++) peaks[b] /= top;
+    const beatLen = tempos.length ? median(tempos) : 0.5, bar = 4 * beatLen;
+    let sx = 0, sy = 0;
+    hits.forEach((h) => {
+      if (h.k === "kick") {
+        const g = 2 * Math.PI * (h.t % beatLen) / beatLen;
+        sx += Math.cos(g);
+        sy += Math.sin(g);
+      }
+    });
+    let phase = sx || sy ? Math.atan2(sy, sx) / (2 * Math.PI) * beatLen : 0;
+    if (phase < 0) phase += beatLen;
+    const drops = hits.filter((h) => h.k === "drop").map((h) => h.t);
+    const rises = drops.filter((d) => meanE(cum, FPS, n, d, d + 2) > 1.5 * meanE(cum, FPS, n, d - 4, d));
+    let off = phase, bestFit = -Infinity;
+    for (let c = 0; c < 4; c++) {
+      const o = phase + c * beatLen;
+      let fit = 0;
+      rises.forEach((d) => {
+        fit += Math.cos(2 * Math.PI * (d - o) / bar);
+      });
+      if (fit > bestFit + 1e-9) {
+        bestFit = fit;
+        off = o;
+      }
+    }
+    return { fps: FPS, n, env, period, cum, hits, peaks, drops, rises, duration: buffer.duration, beat: beatLen, bar, off: off % bar, bpm: tempos.length ? Math.round(60 / beatLen) : 0 };
+  }
+  function bestStart(sc, len) {
+    if (!(len > 0) || len >= sc.duration - 0.05) return 0;
+    const mean = (a, b) => meanE(sc.cum, sc.fps, sc.n, a, b);
+    let best = 0, top = -Infinity;
+    for (let s = sc.off - sc.bar * Math.floor(sc.off / sc.bar); s + len <= sc.duration + 1e-6; s += sc.bar) {
+      let v = mean(s, s + len);
+      for (const d of sc.rises) {
+        const u = (d - s) / len;
+        if (u > 0.12 && u < 0.6) v += 0.5;
+        else if (u >= 0 && u <= 0.12) v -= 0.15;
+      }
+      if (v > top + 1e-9) {
+        top = v;
+        best = s;
+      }
+    }
+    return Math.max(0, best);
+  }
+  function followScore(sc, t, dt, A2, BEAT2, on2, mem2) {
+    const f = Math.max(0, Math.min(sc.n - 1e-3, t * sc.fps)), i = Math.floor(f), u = f - i, e = sc.env, o = i * 5;
+    A2.low = e[o] + (e[o + 5] - e[o]) * u;
+    A2.mid = e[o + 1] + (e[o + 6] - e[o + 1]) * u;
+    A2.high = e[o + 2] + (e[o + 7] - e[o + 2]) * u;
+    A2.lvl = e[o + 3] + (e[o + 8] - e[o + 3]) * u;
+    A2.wave = e[o + 4] + (e[o + 9] - e[o + 4]) * u;
+    BEAT2.period = sc.bpm ? sc.beat : sc.period[i] || BEAT2.period;
+    BEAT2.bpm = sc.bpm || BEAT2.bpm;
+    const hits = sc.hits;
+    if (t >= mem2.t && t - mem2.t < 0.25) {
+      while (mem2.k < hits.length && hits[mem2.k].t <= t) {
+        const h = hits[mem2.k++];
+        A2[h.k] = 1;
+        if (h.k === "kick") BEAT2.last = t;
+        if (on2[h.k]) on2[h.k]();
+      }
+    } else {
+      let lo = 0, hi = hits.length;
+      while (lo < hi) {
+        const m = lo + hi >> 1;
+        if (hits[m].t <= t) lo = m + 1;
+        else hi = m;
+      }
+      mem2.k = lo;
+    }
+    mem2.t = t;
+    A2.playT += dt;
+    A2.kick *= Math.exp(-dt * 8);
+    A2.snare *= Math.exp(-dt * 10);
+    A2.hat *= Math.exp(-dt * 16);
+    A2.drop *= Math.exp(-dt * 2.5);
+    A2.cut *= Math.exp(-dt * 5);
+  }
 
   // src/hands.js
   var NAMES = ["spin", "zoom", "warp", "trails"];
@@ -1537,10 +1900,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   var actx = null;
   var analyser = null;
   var recDest = null;
-  var fbuf = null;
-  var tbuf = null;
-  var prevBuf = null;
-  var RG = null;
+  var live = makeDetectors(A, BEAT, on);
+  var mem = { t: -1, k: 0 };
   function ensureCtx() {
     if (actx) {
       if (actx.state === "suspended") actx.resume();
@@ -1556,136 +1917,23 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     analyser = actx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.3;
-    fbuf = new Uint8Array(analyser.frequencyBinCount);
-    tbuf = new Uint8Array(analyser.fftSize);
-    prevBuf = new Uint8Array(analyser.frequencyBinCount);
     src.connect(analyser);
     analyser.connect(actx.destination);
     if (actx.createMediaStreamDestination) {
       recDest = actx.createMediaStreamDestination();
       analyser.connect(recDest);
     }
-    const hz = actx.sampleRate / analyser.fftSize;
-    const idx = (lo, hi) => [Math.max(1, Math.floor(lo / hz)), Math.min(fbuf.length - 1, Math.ceil(hi / hz))];
-    RG = {
-      low: idx(35, 130),
-      mid: idx(300, 2500),
-      high: idx(5e3, 14e3),
-      all: idx(35, 14e3),
-      kick: idx(35, 150),
-      snare: idx(1e3, 4500),
-      hat: idx(7e3, 15e3)
-    };
+    live.configure(actx.sampleRate, analyser.fftSize);
   }
   var recordStream = () => recDest && recDest.stream;
-  function avg(r) {
-    let s = 0;
-    for (let i = r[0]; i <= r[1]; i++) s += fbuf[i];
-    return s / ((r[1] - r[0] + 1) * 255);
-  }
-  function flux(r) {
-    let s = 0;
-    for (let i = r[0]; i <= r[1]; i++) {
-      const d = fbuf[i] - prevBuf[i];
-      if (d > 0) s += d;
-    }
-    return s / ((r[1] - r[0] + 1) * 255);
-  }
-  var det = (gap, k) => ({ mean: 0, dev: 0, last: -9, gap, k });
-  var DET = { kick: det(0.17, 1.6), snare: det(0.13, 1.9), hat: det(0.06, 1.5) };
-  function detect(d, x, t, dt) {
-    const a = 1 - Math.exp(-dt / 0.9);
-    const hit = x > d.mean + d.k * d.dev + 0.01 && t - d.last > d.gap;
-    if (hit) d.last = t;
-    d.mean += (x - d.mean) * a;
-    d.dev += (Math.abs(x - d.mean) - d.dev) * a;
-    return hit;
-  }
-  var clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
-  function trackTempo() {
-    const ioi = G.clock - BEAT.last;
-    BEAT.last = G.clock;
-    if (ioi <= 0.24 || ioi >= 1.6) return;
-    BEAT.iois.push(ioi);
-    if (BEAT.iois.length > 16) BEAT.iois.shift();
-    if (BEAT.iois.length < 4) return;
-    let m = BEAT.iois.slice().sort((a, b) => a - b)[Math.floor(BEAT.iois.length / 2)];
-    while (m > 0.75) m /= 2;
-    while (m < 0.35) m *= 2;
-    BEAT.period = m;
-    BEAT.bpm = Math.round(60 / m);
-  }
   function resetAnalysis() {
-    BEAT.iois = [];
-    BEAT.bpm = 0;
-    BEAT.last = -9;
-    A.playT = 0;
-    A.eSlow = 0;
-    A.eFast = 0;
+    live.reset();
+    mem.t = -1;
   }
   function analyse(dt) {
-    let lo = 0, mi = 0, hi = 0, lv = 0, wv = 0;
-    const playing = analyser && !audio.paused;
-    if (playing) {
-      analyser.getByteFrequencyData(fbuf);
-      const raw = [avg(RG.low), avg(RG.mid), avg(RG.high), avg(RG.all)];
-      for (let i = 0; i < 4; i++) {
-        A.pk[i] = Math.max(raw[i], A.pk[i] - dt * 0.04, 0.12);
-        raw[i] /= A.pk[i];
-      }
-      lo = clamp((raw[0] - 0.35) / 0.65);
-      mi = clamp((raw[1] - 0.25) / 0.75);
-      hi = clamp((raw[2] - 0.2) / 0.8);
-      lv = clamp(raw[3]);
-      if (analyser.getByteTimeDomainData) {
-        analyser.getByteTimeDomainData(tbuf);
-        let s = 0;
-        for (let i = 0; i < tbuf.length; i += 4) {
-          const v = (tbuf[i] - 128) / 128;
-          s += v * v;
-        }
-        const rms = Math.sqrt(s * 4 / tbuf.length);
-        A.wpk = Math.max(rms, A.wpk - dt * 0.03, 0.04);
-        wv = Math.pow(clamp((rms / A.wpk - 0.2) / 0.8), 1.25);
-      } else wv = lv;
-      const t = G.clock;
-      if (detect(DET.kick, flux(RG.kick), t, dt) && raw[0] > 0.45) {
-        A.kick = 1;
-        trackTempo();
-        on.kick && on.kick();
-      }
-      if (detect(DET.snare, flux(RG.snare), t, dt)) {
-        A.snare = 1;
-        on.snare && on.snare();
-      }
-      if (detect(DET.hat, flux(RG.hat), t, dt)) {
-        A.hat = 1;
-        on.hat && on.hat();
-      }
-      prevBuf.set(fbuf);
-      A.playT += dt;
-    }
-    const env = (cur, target, att, rel) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? att : rel)));
-    A.low = env(A.low, lo, 0.012, 0.14);
-    A.mid = env(A.mid, mi, 0.04, 0.3);
-    A.high = env(A.high, hi, 0.01, 0.1);
-    A.lvl = env(A.lvl, lv, 0.08, 0.6);
-    A.wave = env(A.wave, wv, 8e-3, 0.08);
-    if (playing) {
-      const dv = 0.6 * lo + 0.4 * lv;
-      A.eFast = env(A.eFast, dv, 0.15, 0.25);
-      A.eSlow = A.playT < 4 ? A.eFast : env(A.eSlow, dv, 3, 3);
-      if (A.playT > 4 && A.eSlow > 0.1 && A.eFast > A.eSlow * 1.35 && A.eFast > 0.3 && G.clock - A.lastDrop > 6) {
-        A.lastDrop = G.clock;
-        A.drop = 1;
-        on.drop && on.drop();
-      }
-    }
-    A.kick *= Math.exp(-dt * 8);
-    A.snare *= Math.exp(-dt * 10);
-    A.hat *= Math.exp(-dt * 16);
-    A.drop *= Math.exp(-dt * 2.5);
-    A.cut *= Math.exp(-dt * 5);
+    const playing = !audio.paused;
+    if (playing && SONG.score) followScore(SONG.score, audio.currentTime, dt, A, BEAT, on, mem);
+    else live.analyse(dt, G.clock, analyser, playing);
   }
 
   // src/audio/sample-loop.js
@@ -2077,14 +2325,14 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     U.tapeHit = clamp2(0.9 * sn + 0.5 * k + drop + cut);
     const nb = 8 * Math.round(P.seg);
     const span = Math.max(0.8, BEAT.period * 4) / clamp2(4.5 * spin, 0.2, 5);
-    const live = clamp2(F * (0.8 * A.wave + 0.25 * lo) + 0.45 * k);
-    WV.hist[0] = Math.max(WV.hist[0] * Math.exp(-dt * 6), live);
+    const live2 = clamp2(F * (0.8 * A.wave + 0.25 * lo) + 0.45 * k);
+    WV.hist[0] = Math.max(WV.hist[0] * Math.exp(-dt * 6), live2);
     S.waveAcc += dt * nb / span;
     const sh = Math.min(WAVE_N - 1, Math.floor(S.waveAcc));
     S.waveAcc -= Math.floor(S.waveAcc);
     if (sh > 0) {
       WV.hist.copyWithin(sh, 0);
-      WV.hist.fill(live, 0, sh);
+      WV.hist.fill(live2, 0, sh);
     }
     U.waveN = nb;
     U.waveT = S.waveAcc;
@@ -3410,7 +3658,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     syncExport();
     requestAnimationFrame(frame);
     makeSampleLoop().then((blob) => {
-      if (!soundReady) setSound(URL.createObjectURL(blob), "Sample loop \xB7 120 BPM");
+      if (!soundReady) setSound(blob, "Sample loop \xB7 120 BPM");
     }).catch(() => {
       el.sndName.textContent = "Choose a sound to start";
       el.bigPlayLbl.textContent = "Choose a sound to start";
@@ -3514,7 +3762,35 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     };
     img.src = url;
   }
-  function setSound(url, name) {
+  var songSeq = 0;
+  async function readSong(blob) {
+    const my = ++songSeq;
+    Object.assign(SONG, { state: "reading", progress: 0, buffer: null, score: null });
+    try {
+      const buffer = await decodeTrack(await blob.arrayBuffer());
+      if (my !== songSeq) return;
+      if (!(buffer.duration > 0) || buffer.duration > 900) throw new Error("too long to read ahead");
+      const score = await scanTrack(buffer, (p) => {
+        if (my === songSeq) SONG.progress = p;
+      });
+      if (my !== songSeq) return;
+      Object.assign(SONG, { state: "ready", progress: 1, buffer, score });
+      placeClip(bestStart(score, CLIP.len));
+    } catch (e) {
+      if (my === songSeq) Object.assign(SONG, { state: "failed", buffer: null, score: null });
+    }
+  }
+  function placeClip(start) {
+    const dur = SONG.score ? SONG.score.duration : audio.duration;
+    CLIP.len = LENS[OUT.len] || 0;
+    if (!isFinite(dur) || !(CLIP.len > 0) || CLIP.len >= dur) {
+      CLIP.start = 0;
+      return;
+    }
+    CLIP.start = Math.max(0, Math.min(dur - CLIP.len, start));
+  }
+  function setSound(blob, name) {
+    const url = URL.createObjectURL(blob);
     const wasPlaying = !audio.paused;
     if (soundURL && soundURL !== url) URL.revokeObjectURL(soundURL);
     soundURL = url;
@@ -3523,11 +3799,13 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     soundReady = true;
     resetAnalysis();
     setSoundReady(name);
+    CLIP.start = 0;
+    readSong(blob);
     if (wasPlaying) audio.play().catch(() => {
     });
   }
   function loadSoundFile(file) {
-    setSound(URL.createObjectURL(file), file.name || "Sound");
+    setSound(file, file.name || "Sound");
   }
   function routeFile(f) {
     const t = f.type || "", n = (f.name || "").toLowerCase();
@@ -3555,7 +3833,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     adaptQuality(dt, now, SESSION.active);
     requestAnimationFrame(frame);
   }
-  if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND };
+  if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND, SONG, CLIP };
   boot();
 })();
 </script>
