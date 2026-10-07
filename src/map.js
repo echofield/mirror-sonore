@@ -86,9 +86,11 @@ export function step(dt) {
   U.contrast = 1.04 + pm.c;
   U.sat = 1 + .3 * hi + ({ Ink: 0, Original: 0, Picture: .05 }[G.dir] ?? .12);
   // Trails; a Morph transition temporarily holds the old frame so looks dissolve into each other.
-  const trailBase = clamp(trails * (1 - .55 * k - .5 * cut), 0, .97);
+  // Fluid needs something to carry: it keeps a share of the old frame even where the look has no trails
+  const kept = Math.max(trails, V.fluid > .01 ? .5 + .45 * V.fluid : 0);
+  const trailBase = clamp(kept * (1 - .55 * k - .5 * cut), 0, .97);
   U.trail = Math.max(Math.pow(trailBase, f60), Math.pow(.94, f60) * S.morph);
-  U.fb = 1 + (.003 + .028 * k + .008 * lo) * f60 * (trails > .01 || S.morph > .05 ? 1 : 0);
+  U.fb = 1 + (.003 + .028 * k + .008 * lo) * f60 * (kept > .01 || S.morph > .05 ? 1 : 0);
   U.fbRot = spin * .003 * f60;
   U.dx = .32 * Math.sin(S.drift * 1.3 + S.seed); U.dy = .32 * Math.cos(S.drift * .9 + S.seed * 1.7);
   U.slice = V.glitch * (sn * .9 + drop * 1.2 + cut * .6);
@@ -101,6 +103,9 @@ export function step(dt) {
   U.grain = V.grain * (.75 + .7 * ht + .3 * hi);
   U.glow = V.glow * (.6 + .8 * drop) * (1 + Math.max(0, pm.b) * 3);   // glow pulses only with Punch/Breathe pumping
 
+  // Fluid: how far the old frame drifts along the currents each frame; the level of the music pushes them
+  S.flowT += dt * (.25 + .6 * lv) * sl;
+  U.fluid = V.fluid * f60 * (.5 + .9 * lv);
   U.layer = G.layer ? V.over : 0;
 
   // Tape: the amount is the Tape fader, or the VHS mode itself. Hits make the tape jump and tear.

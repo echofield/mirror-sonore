@@ -15,6 +15,7 @@ export const S = {
   poke: [0, 0, 9],   // holo ripple: x, y, age in seconds
   morph: 0,          // 1 right after a Morph transition, decays to 0
   pumpT: 9,          // seconds since the last kick, for the pump envelope
+  flowT: 0,          // Fluid: the slow clock the currents move by
   waveAcc: 0,        // Wave mode: how far the bar being born at the left edge has come out (0 to 1)
   echoT: 0           // seconds since the last tracer capture
 };

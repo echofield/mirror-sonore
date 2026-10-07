@@ -12,7 +12,9 @@ Drop a picture (an image or a video) and a sound. The picture folds, warps and h
 - **Directions:** Picture (colors taken from your image), Original (untouched), Neon, Holo, Gold, Ink, Dream, Ember.
 - **Auto:** changes the look on a kick every 4, 8 or 16 bars, and on every drop, with a Morph dissolve or a hard Cut.
 - **Beat, Pump and Flow:** your live intensity controls. Beat sets the hits (glitch, color split, flashes). Pump sets how much the kick sidechains the picture: Off, Duck, Punch or Breathe, with a length synced to the tempo. Flow sets the continuous motion.
-- **Export:** 9:16, 1:1 or 4:5, in 720p or 1080p, at 15s, 30s, 60s or full track. Record 1, 3 or 5 variations of the same section in one go.
+- **The song:** read ahead when you load it and drawn as its waveform. The clip, the stretch that loops and gets recorded, is framed on it: tap to start it there, drag to move it (it lands on a bar), or let Best place it.
+- **Export:** 9:16, 1:1 or 4:5, in 720p or 1080p, at 15s, 30s, 60s or full track, 1, 3 or 5 variations in one go. Where the browser can encode, a clip is rendered frame by frame at full size, so a phone gets the same file as a computer: play it once by hand first (Perform) or have it rendered straight away (Instant).
+- **Fluid:** the trails drift along slow currents, the way the Windows Media Player visualisations moved.
 - Phone layout keeps the preview pinned while you edit. Full screen has floating controls.
 
 Keys: Space play · R record · I image · K keep · S shuffle · A auto · T trip · P pump style · F full screen · 1–9 modes · arrows turn and zoom · Shift + arrows trails and warp · 0 centre · L latch.
@@ -24,6 +26,10 @@ npm install
 npm run dev        # http://localhost:5173 (unbundled source)
 npm run build      # dist/index.html: one self-contained file
 ```
+
+## Licences
+
+The built page includes [Mediabunny](https://github.com/Vanilagy/mediabunny) (MPL-2.0), which writes the MP4 of a clip rendered frame by frame.
 
 ## Deploy
 

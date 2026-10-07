@@ -86,6 +86,7 @@ rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
       uHue: 0, uChroma: 1.2, uBright: 1, uContrast: 1.1, uSat: 1.1, uTunZ: .7, uFb: 1.004, uFbRot: .001,
       uPalMix: D.mix, uPalPhase: .1, uSlice: 0, uSliceSeed: 12.3, uHolo: .84, uBands: 1.1, uSparkle: .9, uBump: .6, uPokeAmp: .9,
       uWaveAmp: .6, uWaveT: .4, uWaveN: 40, uWaveBehind: layered ? .6 : .12,
+      uFluid: dir === 'Gold' ? .9 : 0, uFlowT: 1.3,   // the Gold row lets the trails flow
       uAspect2: 1.2, uLayer: layered ? .6 : 0, uLayerMode: 1, uLayerOn: layered ? 1 : 0,
       uLattice: trip ? .6 : 0, uLatScale: 11, uLatWarp: mode % 2 ? 1 : 0, uEcho: trip ? .3 : 0, uBreath: trip ? .5 : 0 };
     for (const k in U) f1(k, U[k]);

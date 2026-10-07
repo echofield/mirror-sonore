@@ -18,7 +18,7 @@ Run `npm test` after any change to `src/gl`, `src/audio`, `src/auto.js`, `src/ma
 
 ## Architecture
 
-Frame order (in `src/main.js`): clock → `analyse` → `syncVideo` → `autoTick` → `handTick` → `step` → `render` → `updateHUD` → `recordTick` → `adaptQuality`.
+Frame order (in `src/main.js`): clock → the clip loop → `analyse` → `syncVideo` → `autoTick` → `handTick` → `step` → `render` → `updateHUD` → `drawSongBar` → `recordTick` → `adaptQuality`. While a clip is rendered frame by frame (`G.exact`) the loop stands still and `exactFrame(t, dt, ms, auto)` in `main.js` is called for each frame instead.
 
 | File | Responsibility |
 |---|---|
@@ -26,7 +26,10 @@ Frame order (in `src/main.js`): clock → `analyse` → `syncVideo` → `autoTic
 | `src/state.js` | Shared mutable state objects (see "State" below). Mutate fields; never reassign the exports. |
 | `src/gl/shaders.js` | GLSL ES 1.0. `mainFS` (mode transforms, palette grading, trip layer, feedback trails), `postFS` (tape, glow, roll-off, vignette, grain), `copyFS` (tracer capture). |
 | `src/gl/renderer.js` | WebGL1 setup, ping-pong feedback targets (half-float when available), the held tracer frame, mipmapped image texture or a video's current frame (`useVideo`), the one-row Wave data texture, uniform upload. |
-| `src/audio/engine.js` | `<audio>` → analyser graph, band envelopes, spectral-flux onsets (kick/snare/hat), tempo from kick intervals, drop detection. Fires `on.kick/snare/hat/drop`. |
+| `src/audio/engine.js` | `<audio>` → analyser graph. `analyse` gets each frame's envelopes and hits from the score when the song has been read ahead, else from the detectors listening live. `analyseAt(t, dt)` reads the score at a chosen time. Fires `on.kick/snare/hat/drop`. |
+| `src/audio/detect.js` | The detectors and their memory (`makeDetectors`): band envelopes, spectral-flux onsets (kick/snare/hat), tempo from kick intervals, drop detection. They read anything that answers like an AnalyserNode. |
+| `src/audio/score.js` | The song read ahead: `decodeTrack`, `makeReader` (an FFT that answers like the browser's analyser), `scanTrack` (the detectors over the whole track, 60 steps a second → the score), `followScore`, `snapBar`, `bestStart`. |
+| `src/songbar.js` | The song bar: waveform, playhead, and the clip window (tap to start it there, drag to move it, snapped to bars). |
 | `src/audio/sample-loop.js` | Offline-synthesised 16 s demo loop (groove → breakdown → drop) encoded to WAV. |
 | `src/image/palette.js` | k-means palette from the loaded image → the "Picture" direction. |
 | `src/image/sample-image.js` | Generated demo image. |
@@ -34,7 +37,10 @@ Frame order (in `src/main.js`): clock → `analyse` → `syncVideo` → `autoTic
 | `src/hands.js` | The hands: drags on the picture and held arrow keys push offsets (`HAND`) on top of the look; spring back, or Latch. |
 | `src/auto.js` | Looks, directions, trips (`setTrip`), Shuffle, the Auto engine (new look on a kick every N bars and on drops), Morph/Cut transitions. |
 | `src/ui.js` | Builds controls from config, `syncUI`, phone tabs, full screen (CSS immersive + optional Fullscreen API), results list, keyboard. |
-| `src/record.js` | Recording sessions (1/3/5 clips), MediaRecorder, still images (`takeStill`: the canvas as a PNG at full output size), saving (Artifact downloads capability, else share sheet, else download link). |
+| `src/record.js` | Sessions (1/3/5 clips) in two ways: exact (a take, then frame by frame) and live (MediaRecorder, the fallback). Still images (`takeStill`). Saving (Artifact downloads capability, else share sheet, else download link). |
+| `src/take.js` | A take: `snapshot`/`restore` of everything a pass starts from, `takeTick` writes what changed with its time, `playTake` plays it back. |
+| `src/exact.js` | `exactSupport` (which codecs this browser can write), `clipSound` (the clip's stretch of the song), `writeClip` (frames → MP4 through Mediabunny). |
+| `src/rng.js` | Seeded chance in two streams, `RNG.looks` and `RNG.hits` (`createRng` comes from ifah-visual-lab). Use these, never `Math.random`, for anything that shows in the picture. |
 | `src/presets.js` | Kept looks: `keepLook` snapshots everything the controls say plus a thumbnail, `applyKept` brings one back (values checked against today's ranges). Stored in `localStorage`, 12 at most. |
 | `src/view.js` | Output size from format/quality; adaptive preview scale (1 → .75 → .5 on slow devices, forced to 1 while recording). |
 | `index.html` | Markup template with `build:*` markers that `scripts/build.mjs` replaces. |
@@ -66,7 +72,12 @@ The interface follows IFAH's paper direction. Colour is semantic: ink is what is
 - **WebGL1 / GLSL ES 1.0 only** (older iPhones). Loops need constant bounds. `smoothstep(a, b, x)` needs `a < b`. Avoid `texture2D` inside non-uniform control flow: compute the coordinate in the loop and sample after it (see the Fractal branch).
 - Kaleido and Mirror fold **before** the warp; otherwise the symmetry breaks.
 - **Audio graph**: `createMediaElementSource` can be called once per element, so swap `audio.src` instead of making new elements. Create or resume the AudioContext only inside a user gesture (`ensureCtx`). `navigator.audioSession.type = 'playback'` lets iOS play with the silent switch on.
-- **Recording** captures the canvas (`captureStream(30)`) plus the analyser's `MediaStreamDestination`. Call `setOutputScale(1)` before creating the stream. MP4 is preferred and WebM is the fallback.
+- **The song is read ahead when it can be.** `SONG.score` holds what the detectors found over the whole track; while it exists nothing listens live. Do not add analysis that only works live: put it in `detect.js`, so the scan gets it too. The detectors' thresholds are part of how the picture feels and are the owner's to tune.
+- **The clip** (`CLIP.start`, `CLIP.len`) is what plays in a loop and what gets recorded. Its length is the Export length; `bestStart` and the song bar move its start.
+- **Exact clips.** When `exactReady()` (a score, a decoded buffer, an encoder, a still picture) Record makes the clip frame by frame at the full output size, 30 frames a second. Perform: a take is played once and written down, then rendered. Instant: rendered straight away with Auto running inside the render. A take holds outcomes (the looks that were applied and how they landed, the hands' targets), so the first clip shows what the player saw; variations replay only the hands and get looks of their own. The render calls `exactFrame` only: anything a frame needs must be reachable from `analyseAt`, `autoTick`, `handTick`, `step` and `render`, and must not read the page's clocks.
+- **Live recording** (the fallback: a video as the picture, a song that cannot be read, no encoder) captures the canvas (`captureStream(30)`) plus the analyser's `MediaStreamDestination`. Call `setOutputScale(1)` before creating the stream. MP4 is preferred and WebM is the fallback.
+- **Fluid** (Color) keeps a share of the old frame and lets it drift along slow currents in the feedback step of `mainFS` (`uFluid`, `uFlowT`): the way the Windows Media Player and MilkDrop visualisations moved, where each frame is the last one carried a little further.
+- **The build targets ES2020** (Mediabunny needs BigInt), so iOS 14 and later; the bundle is minified. Mediabunny is MPL-2.0: the notice in the built page and in the README must stay.
 
 ### Trips (`TRIPS` in config.js)
 Six substance-named art presets (LSD, Psilocybin, DMT, Mescaline, Ayahuasca, Ketamine), built from how the visuals are described in research and trip reports. Each trip sets a palette, the modes Auto may use, a look, a pump style and the **trip layer**:
@@ -94,9 +105,12 @@ Each trip is also registered as a hidden entry in `DIRS`, so its palette and mod
 - **New direction**: add an entry to `DIRS` with 4 palette colors (dark → light), `mix`, the `modes` it favours, and grain/glow/color defaults. Chips are generated automatically.
 - **New fader**: add a definition to `FEEL`/`TEX`/`FOIL`/`MACROS`, a default in `DEFAULTS`, and the key in `KEYS` if it should ease. Read it in `map.js` or `renderer.js`.
 
-## Ideas not built yet
-- Text/caption layer burned into the video (lyrics, hook text).
-- Picking a start point by energy (jump to the drop automatically) for each clip in a batch.
-- Offline rendering (frame-by-frame with `OfflineAudioContext` analysis) for perfectly smooth exports on slow phones.
-- GLB/3D models in the Holo or a new mode.
-- Microphone / live input mode.
+## What comes next (agreed with the owner, 7 Oct 2026, in this order)
+Done: reading the song ahead with a clip on a waveform (1), frame-exact export (2), takes (3, first form: one take per session, rendered at once), and the Fluid control from the Windows Media Player study.
+1. Takes kept and replayed: several takes of the same clip, choose one, render it again in another format.
+2. Hear like a musician: the song split into drums, bass, voice and the rest in the browser (Demucs ports), each driving its own part of the picture; a learned beat and downbeat tracker (Beat This!, MIT). Both are large downloads: optional, computer first. Avoid Essentia.js (AGPL).
+3. Words: a hook or lyric layer that hits with the beat, inside the TikTok safe zone.
+4. Depth from one picture: a depth map for a 2.5D picture the music can push.
+5. Formats for musicians: a seamless 3 to 8 second vertical loop for Spotify Canvas.
+6. More ways to play it: a MIDI controller on the hands and faders (`initMidi` in IFAH's `src/engine/midi.js` is a start), camera hand tracking driving the same four hand values (IFAH's hands engine; its 17 MB of model cannot live in the single file).
+Also still open: a video as the picture in exact clips (it is recorded live for now), microphone or line input, GLB models.

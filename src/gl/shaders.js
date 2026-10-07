@@ -15,6 +15,7 @@ uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue
 uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveN, uWaveBehind;
 uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
 uniform sampler2D uImg2; uniform float uAspect2, uLayer, uLayerMode, uLayerOn;              // a second picture over the first
+uniform float uFluid, uFlowT;                                                               // currents that carry the trails
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
@@ -216,6 +217,13 @@ void main(){
   vec2 s = fc/uRes - 0.5;
   float ar = uRes.x/uRes.y;
   s.x *= ar; s = rot(uFbRot)*s/uFb; s.x /= ar;
+  // Fluid: the old frame also drifts along a slow field of currents, each one pushing across the other
+  // (sideways by where it is in height, up and down by where it is in width), so what was drawn keeps flowing.
+  if(uFluid > 0.001){
+    vec2 cur = vec2(sin(s.y*7.0 + uFlowT*0.9) + 0.6*sin(s.y*13.0 - uFlowT*0.6 + s.x*4.0),
+                    sin(s.x*7.0*ar - uFlowT*0.8) + 0.6*sin(s.x*11.0*ar + uFlowT*0.5 - s.y*5.0));
+    s += cur*uFluid*0.0035;
+  }
   vec3 prev = texture2D(uPrev, s + 0.5).rgb;
   col = mix(col, prev, uTrail);
   gl_FragColor = vec4(col, 1.0);

@@ -227,6 +227,16 @@ check(audioEl[0].paused !== wasPaused, 'a tap on the picture still plays and pau
 ptr('pointerdown', 100, 100); ptr('pointerup', 100, 100); click($('view')); await run(.2);
 check($('autoT').getAttribute('aria-pressed') === 'true', 'the hands leave Auto on');
 
+// Fluid: the trails are kept and carried, even on a look that has none
+const fluidF = $('f-fluid'), trailsF = $('f-trails');
+const autoWas = $('autoT').getAttribute('aria-pressed');
+trailsF.value = '0'; trailsF.dispatchEvent(new w.Event('input')); await run(1.5);
+const dry = w.__ms.U.trail;
+fluidF.value = '0.8'; fluidF.dispatchEvent(new w.Event('input')); await run(1.5);
+check(dry < .05 && w.__ms.U.fluid > .2 && w.__ms.U.trail > .5, `Fluid keeps the old frame and carries it (trail ${dry.toFixed(2)} → ${w.__ms.U.trail.toFixed(2)}, drift ${w.__ms.U.fluid.toFixed(2)})`);
+fluidF.value = '0'; fluidF.dispatchEvent(new w.Event('input')); trailsF.value = '0.45'; trailsF.dispatchEvent(new w.Event('input'));
+if (autoWas === 'true' && $('autoT').getAttribute('aria-pressed') === 'false') click($('autoT'));
+
 // kept looks: keep one, change everything, bring it back, remove it, undo
 click($('dirs').children[2]); await run(.2);                                  // Neon
 const warp = $('f-warp'); warp.value = '0.66'; warp.dispatchEvent(new w.Event('input'));

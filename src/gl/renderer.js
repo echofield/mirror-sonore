@@ -155,6 +155,7 @@ export function render(now) {
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src.t); ui1(MAIN, 'uPrev', 1);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, echo.t); ui1(MAIN, 'uEchoTex', 2);
   gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, img2Tex); ui1(MAIN, 'uImg2', 4);
+  u1(MAIN, 'uFluid', U.fluid); u1(MAIN, 'uFlowT', S.flowT);
   u1(MAIN, 'uAspect2', G.img2Aspect); u1(MAIN, 'uLayer', U.layer); u1(MAIN, 'uLayerMode', BLENDS.indexOf(G.blend)); u1(MAIN, 'uLayerOn', G.layer ? 1 : 0);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, waveTex); ui1(MAIN, 'uWave', 3);
   if (P.mode === WAVE) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, WAVE_N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, WV.tex);
