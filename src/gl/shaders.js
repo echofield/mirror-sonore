@@ -14,6 +14,7 @@ uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform 
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
 uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveN, uWaveBehind;
 uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
+uniform sampler2D uImg2; uniform float uAspect2, uLayer, uLayerMode, uLayerOn;              // a second picture over the first
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
@@ -44,6 +45,10 @@ float hf(vec2 v, float amp, float t){
   return h + uPokeAmp*0.09*sin(d*24.0 - uPoke.z*13.0)*exp(-uPoke.z*1.6)*front; }
 // Hexagonal lattice (Klüver's honeycomb form constant): local coords in xy, cell id in zw.
 const vec2 HS = vec2(1.0, 1.7320508);
+// The second picture over the first: 0 Mix, 1 Screen, 2 Multiply; uLayer is how much.
+vec3 over(vec3 a, vec3 b){
+  vec3 m = uLayerMode < 0.5 ? b : (uLayerMode < 1.5 ? 1.0 - (1.0 - a)*(1.0 - b) : a*b);
+  return mix(a, m, uLayer); }
 float hexDist(vec2 p){ p = abs(p); return max(dot(p, HS*0.5), p.x); }
 vec4 hexCell(vec2 p){
   vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0))/HS.xyxy) + 0.5;
@@ -84,6 +89,7 @@ void main(){
     float b2 = vnoise(vec2(bq.x*5.0 + 3.0, bq.y*70.0));
     n = normalize(n + vec3(b1 - 0.5, b2 - 0.5, 0.0)*uBump*0.5 + vec3(uTilt*0.8, 0.0));
     vec3 img = texture2D(uImg, clamp(iuv, 0.0, 1.0)).rgb;
+    if(uLayerOn > 0.5) img = over(img, texture2D(uImg2, clamp(iuv, 0.0, 1.0)).rgb);
     vec3 L = normalize(vec3(-0.4, 0.6, 0.7));
     float ndv = max(n.z, 0.0);
     float film = ((1.0 - ndv)*10.0 + h0*5.0 + dot(n.xy, vec2(0.7, 0.4))*3.0 + dot(iuv, vec2(0.9, 1.3))*1.2)*uBands + uT*0.05 + uPalPhase;
@@ -113,6 +119,7 @@ void main(){
     }
     vec2 tuv = vec2(tz.x/(0.84*uAspect), tz.y/0.84) + 0.5 + uDrift*0.3;
     vec3 img = texture2D(uImg, mr(tuv)).rgb;
+    if(uLayerOn > 0.5) img = over(img, texture2D(uImg2, mr(tuv)).rgb);
     vec3 esc = texture2D(uImg, mr(vec2(sm*0.04 + uT*0.02, 0.5 + 0.3*sin(sm*0.3)) + uDrift)).rgb*(0.38 + 0.22*sin(sm*0.5 + uT));
     float depth = 1.0 - clamp(trapI/32.0, 0.0, 1.0)*0.75;
     col = trapI < 0.0 ? esc : img*depth;
@@ -170,8 +177,13 @@ void main(){
     col.r = texture2D(uImg, mr(uv + dir)).r;
     col.g = texture2D(uImg, mr(uv)).g;
     col.b = texture2D(uImg, mr(uv - dir)).b;
+    bool wave = uMode > 6.5 && uMode < 7.5;
+    vec3 c2 = vec3(0.0);
+    if(uLayerOn > 0.5) c2 = texture2D(uImg2, mr(vec2(q.x/uAspect2, q.y) + 0.5)).rgb;
+    if(uLayerOn > 0.5 && !wave) col = over(col, c2);
     col = gradeMap(col);
-    if(uMode > 6.5 && uMode < 7.5) col = mix(mix(uBg, col, uWaveBehind), col*(1.0 - 0.35*wtail), wm);
+    // Wave: the bars are the first picture; around them, the second picture if there is one, else the first, dimmed by Behind
+    if(wave) col = mix(mix(uBg, uLayerOn > 0.5 ? gradeMap(c2) : col, uWaveBehind), col*(1.0 - 0.35*wtail), wm);
   }
 
   col = hueRot(col, uHue);

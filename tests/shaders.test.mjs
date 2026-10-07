@@ -40,6 +40,10 @@ const wd = new Uint8Array(256 * 4);
 for (let i = 0; i < 256; i++) { wd[i * 4 + 1] = 255 * (.12 + .88 * Math.abs(Math.sin(i * .37)) * (.35 + .65 * Math.abs(Math.sin(i * .06)))); wd[i * 4 + 3] = 255; }
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, wd);
 for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+// a second picture for the layer: the same sample, upside down
+const img2 = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, img2);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(src.data.buffer, src.data.byteOffset, S * S * 4)); gl.generateMipmap(gl.TEXTURE_2D);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
 function target() {
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -67,6 +71,8 @@ rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, img); gl.uniform1i(MAIN.u.uImg, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, s.t); gl.uniform1i(MAIN.u.uPrev, 1);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, wave); if (MAIN.u.uWave) gl.uniform1i(MAIN.u.uWave, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, img2); if (MAIN.u.uImg2) gl.uniform1i(MAIN.u.uImg2, 3);
+    const layered = dir === 'Original';   // the Original row lays a second picture over the first (Screen)
     const f1 = (n, v) => { if (MAIN.u[n]) gl.uniform1f(MAIN.u[n], v); };
     gl.uniform2f(MAIN.u.uRes, W, H); gl.uniform2f(MAIN.u.uDrift, .1, -.05);
     if (MAIN.u.uTilt) gl.uniform2f(MAIN.u.uTilt, .25, -.12);
@@ -79,7 +85,8 @@ rows.forEach((dir, ry) => MODES.forEach((name, mode) => {
     const U = { uAspect: .8, uT: 1 + f * .05, uMode: mode, uSeg: 6, uZoom: 1, uRot: .4, uWarp: mode === 4 ? .5 : .25, uTwist: .3, uTrail: .3,
       uHue: 0, uChroma: 1.2, uBright: 1, uContrast: 1.1, uSat: 1.1, uTunZ: .7, uFb: 1.004, uFbRot: .001,
       uPalMix: D.mix, uPalPhase: .1, uSlice: 0, uSliceSeed: 12.3, uHolo: .84, uBands: 1.1, uSparkle: .9, uBump: .6, uPokeAmp: .9,
-      uWaveAmp: .6, uWaveT: .4, uWaveN: 40, uWaveBehind: .12,
+      uWaveAmp: .6, uWaveT: .4, uWaveN: 40, uWaveBehind: layered ? .6 : .12,
+      uAspect2: 1.2, uLayer: layered ? .6 : 0, uLayerMode: 1, uLayerOn: layered ? 1 : 0,
       uLattice: trip ? .6 : 0, uLatScale: 11, uLatWarp: mode % 2 ? 1 : 0, uEcho: trip ? .3 : 0, uBreath: trip ? .5 : 0 };
     for (const k in U) f1(k, U[k]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

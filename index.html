@@ -114,6 +114,18 @@
           <span class="tile-act">Choose</span>
           <input class="vh" id="sndIn" type="file" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
         </label>
+        <label class="tile" for="img2In">
+          <canvas class="thumb" id="thumb2" width="96" height="96"></canvas>
+          <span class="tile-txt"><b>Second picture</b><span id="img2Name">None. Lay one over the first.</span></span>
+          <span class="tile-act">Choose</span>
+          <input class="vh" id="img2In" type="file" accept="image/*">
+        </label>
+        <div class="overbox" id="overBox" hidden>
+          <div class="opt"><span>Blend</span><div class="seg sm" id="blends" role="group" aria-label="How the second picture is laid over the first"></div></div>
+          <div class="faders" id="overfx"></div>
+          <p class="note">Mix shows both, Screen keeps the light of each, Multiply keeps the dark. In Wave the bars are the first picture and this one is the ground: Behind sets how bright.</p>
+          <button class="qbtn" id="img2Clear" type="button">Remove the second picture</button>
+        </div>
       </div>
       <p class="note">The picture can be an image or a video. The sound can be a track or a video's own sound. Dropping a video onto the page uses it for both.</p>
     </section>

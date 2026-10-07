@@ -2,9 +2,9 @@
 // texture (or a video's current frame), and a one-row data texture for the Wave mode.
 import { VS, mainFS, postFS, copyFS } from './shaders.js';
 import { G, P, V, S, U, WV, WAVE_N } from '../state.js';
-import { WAVE } from '../config.js';
+import { WAVE, BLENDS } from '../config.js';
 
-let gl, MAIN, POST, COPY, imgTex, waveTex, aniso, fbType, targets = [], echo = null, last = 0, rw = 0, rh = 0;
+let gl, MAIN, POST, COPY, imgTex, img2Tex, waveTex, aniso, fbType, targets = [], echo = null, last = 0, rw = 0, rh = 0;
 let onThumb = null, vid = null, vidT = -1;
 
 export function initRenderer(canvas, thumbCb) {
@@ -24,6 +24,9 @@ export function initRenderer(canvas, thumbCb) {
 
   fbType = detectHalfFloat();
   imgTex = gl.createTexture();
+  img2Tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, img2Tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+  clampLinear();
   waveTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, waveTex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, WAVE_N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, WV.tex);
   clampLinear();
@@ -96,12 +99,11 @@ export function setRenderSize(canvas, w, h) {
 }
 
 // Draw any image source into a power-of-two square so it can mipmap (no seams when tiled small).
-export function uploadImage(src, w, h) {
-  vid = null;
-  const size = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096 ? 2048 : 1024;
+function putImage(tex, src, max) {
+  const size = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096 ? max : 1024;
   const c = document.createElement('canvas'); c.width = c.height = size;
   c.getContext('2d').drawImage(src, 0, 0, size, size);
-  gl.bindTexture(gl.TEXTURE_2D, imgTex);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -111,8 +113,17 @@ export function uploadImage(src, w, h) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+}
+export function uploadImage(src, w, h) {
+  vid = null;
+  putImage(imgTex, src, 2048);
   G.imgAspect = w / h;
   if (onThumb) onThumb(src, w, h);
+}
+// The second picture, laid over the first (an image; half the size is plenty for a layer).
+export function uploadOver(src, w, h) {
+  putImage(img2Tex, src, 1024);
+  G.img2Aspect = w / h;
 }
 
 // A video as the picture. Its frames go straight to the texture as they change (no mipmaps:
@@ -143,6 +154,8 @@ export function render(now) {
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, imgTex); ui1(MAIN, 'uImg', 0);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src.t); ui1(MAIN, 'uPrev', 1);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, echo.t); ui1(MAIN, 'uEchoTex', 2);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, img2Tex); ui1(MAIN, 'uImg2', 4);
+  u1(MAIN, 'uAspect2', G.img2Aspect); u1(MAIN, 'uLayer', U.layer); u1(MAIN, 'uLayerMode', BLENDS.indexOf(G.blend)); u1(MAIN, 'uLayerOn', G.layer ? 1 : 0);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, waveTex); ui1(MAIN, 'uWave', 3);
   if (P.mode === WAVE) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, WAVE_N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, WV.tex);
   u1(MAIN, 'uLattice', U.lattice); u1(MAIN, 'uLatScale', U.latScale); u1(MAIN, 'uLatWarp', V.latWarp); u1(MAIN, 'uEcho', U.echo); u1(MAIN, 'uBreath', U.breath);

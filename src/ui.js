@@ -1,5 +1,5 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
-import { MODES, MARKED_MODES, FOLD_MODES, HOLO, WAVE, WAVEFX, WAVE_LABELS, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
+import { MODES, MARKED_MODES, FOLD_MODES, HOLO, WAVE, WAVEFX, WAVE_LABELS, BLENDS, LAYERFX, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
 import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP, HAND } from './state.js';
 import { initHands, handKey, wasDrag, setLatch, centreHands } from './hands.js';
 import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
@@ -16,6 +16,7 @@ export function initUI(handlers) {
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'miniKept', 'recMini', 'recMiniLbl',
    'shotBtn', 'keepBtn', 'kept', 'keptNote', 'pad', 'latchT', 'latchT2', 'wavefx',
+   'thumb2', 'img2Name', 'img2In', 'overBox', 'blends', 'overfx', 'img2Clear',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
    'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
@@ -52,6 +53,9 @@ export function initUI(handlers) {
   buildFaders(el.foil, FOIL, null);
   buildFaders(el.tripfx, TRIPFX, null);
   buildFaders(el.wavefx, WAVEFX, null);
+  buildFaders(el.overfx, LAYERFX, null);
+  BLENDS.forEach(b => addBtn(el.blends, b, b, () => { G.blend = b; syncUI(); }));
+  el.img2Clear.addEventListener('click', () => H.clearOver());
   el.segIn.addEventListener('input', () => {
     P.seg = parseInt(el.segIn.value, 10); el.segOut.textContent = P.mode === WAVE ? 8 * P.seg : P.seg; setFill(el.segIn);
     if (AUTO.on) setAuto(false);
@@ -102,6 +106,7 @@ export function initUI(handlers) {
 
   el.imgIn.addEventListener('change', e => { const f = e.target.files[0]; if (f) H.loadPictureFile(f); e.target.value = ''; });
   el.sndIn.addEventListener('change', e => { const f = e.target.files[0]; if (f) H.loadSoundFile(f); e.target.value = ''; });
+  el.img2In.addEventListener('change', e => { const f = e.target.files[0]; if (f) H.loadOverFile(f); e.target.value = ''; });
   initDrop();
   initKeys();
   syncExport();
@@ -184,7 +189,12 @@ const PUMP_NOTES = {
   Punch: 'On each kick the picture zooms in and flashes, then relaxes.',
   Breathe: 'The picture follows the bass smoothly, without a hard hit on the kick.'
 };
+function syncLayer() {
+  el.overBox.hidden = !G.layer;
+  pressed(el.blends, G.blend);
+}
 function syncTrip() {
+  syncLayer();
   pressed(el.trips, G.trip || 'None'); pressed(el.miniTrips, G.trip || 'None');
   pressed(el.echoRate, G.echoRate);
   el.journeyT.setAttribute('aria-pressed', String(G.journey));
@@ -380,8 +390,8 @@ export function addResultCard(blob, name, info, first, kind) {
   }
 }
 
-export function drawThumb(src, w, h) {
-  const g = el.thumb.getContext('2d'), s = Math.min(w, h);
+export function drawThumb(src, w, h, canvas) {
+  const g = (canvas || el.thumb).getContext('2d'), s = Math.min(w, h);
   g.clearRect(0, 0, 96, 96);
   g.drawImage(src, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 96, 96);
 }

@@ -100,6 +100,8 @@ export function step(dt) {
   U.grain = V.grain * (.75 + .7 * ht + .3 * hi);
   U.glow = V.glow * (.6 + .8 * drop) * (1 + Math.max(0, pm.b) * 3);   // glow pulses only with Punch/Breathe pumping
 
+  U.layer = G.layer ? V.over : 0;
+
   // Tape: the amount is the Tape fader, or the VHS mode itself. Hits make the tape jump and tear.
   U.tape = P.mode === VHS ? Math.max(V.tape, .85) : V.tape;
   U.tapeHit = clamp(.9 * sn + .5 * k + drop + cut);

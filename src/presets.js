@@ -2,7 +2,7 @@
 // the trip layer, Beat/Pump/Flow, pump style, Auto) with a small picture of the moment it was kept. It does not hold the
 // image or the sound, so a kept look can be laid over any picture.
 // They live in this browser's storage. When storage is refused they last until the page closes.
-import { DIRS, TRIPS, MODES, KEYS, DEFAULTS, MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX, PUMP_STYLES, PUMP_LENGTHS, ECHO_RATES, BARS, TRANSITIONS } from './config.js';
+import { DIRS, TRIPS, MODES, KEYS, DEFAULTS, MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX, LAYERFX, BLENDS, PUMP_STYLES, PUMP_LENGTHS, ECHO_RATES, BARS, TRANSITIONS } from './config.js';
 import { P, G, S, PUMP, AUTO } from './state.js';
 import { applyPalette, applyLook, setAuto } from './auto.js';
 
@@ -35,7 +35,7 @@ export function keepLook(canvas) {
   const item = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     name: (G.trip && G.dir !== G.trip ? G.trip + ' · ' : '') + G.dir + ' · ' + MODES[P.mode], dir: G.dir, p,
-    trip: G.trip, echoRate: G.echoRate, journey: G.journey,
+    trip: G.trip, echoRate: G.echoRate, journey: G.journey, blend: G.blend,
     pump: { style: PUMP.style, len: PUMP.len },
     auto: { on: AUTO.on, bars: AUTO.bars, trans: AUTO.trans },
     thumb: thumbOf(canvas)
@@ -63,7 +63,7 @@ export function restoreKept(r) {
 // Bring a kept look back. Every value is checked against today's controls, so an entry kept by an
 // older version (or a damaged one) cannot put the page in a state the faders cannot reach.
 const RANGE = {};
-[MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX].forEach(defs => defs.forEach(d => { RANGE[d.k] = d; }));
+[MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX, LAYERFX].forEach(defs => defs.forEach(d => { RANGE[d.k] = d; }));
 const num = (v, d, lo, hi) => (typeof v === 'number' && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
 
 export function applyKept(k) {
@@ -76,6 +76,7 @@ export function applyKept(k) {
   G.trip = TRIPS[k.trip] ? k.trip : null;
   if (ECHO_RATES[k.echoRate]) G.echoRate = k.echoRate;
   if (typeof k.journey === 'boolean') G.journey = k.journey;
+  if (BLENDS.indexOf(k.blend) >= 0) G.blend = k.blend;
   G.dir = k.dir;
   applyPalette();
   S.hueKick = 0;

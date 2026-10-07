@@ -162,8 +162,12 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .tile-txt{display:flex;flex-direction:column;min-width:0}
 .tile-txt b{font-family:var(--f-mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .tile-txt span{font-family:var(--f-voice);font-size:17px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.overbox{display:grid;gap:10px;padding:12px 0 4px;justify-items:start}
+.overbox > .opt,.overbox > .faders{width:100%}
 .tile-act{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);padding:9px 10px;border:1px solid var(--line);border-radius:2px;background:var(--well)}
-.tile:hover .tile-act{border-color:var(--blue)}
+.tile:hover .overbox{display:grid;gap:10px;padding:12px 0 4px;justify-items:start}
+.overbox > .opt,.overbox > .faders{width:100%}
+.tile-act{border-color:var(--blue)}
 
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;border:1px solid var(--line);background:var(--well);border-radius:2px;padding:0 12px 0 8px;font-size:13.5px;font-weight:500}
@@ -279,7 +283,9 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
   .rack[data-tab="export"] .sec[data-tab="export"]{display:flex}
   .chip,.modegrid button,.seg button{min-height:42px}
   .fader input{height:42px}
-  .tile-act{padding:12px}
+  .overbox{display:grid;gap:10px;padding:12px 0 4px;justify-items:start}
+.overbox > .opt,.overbox > .faders{width:100%}
+.tile-act{padding:12px}
 }
 
 /* ---------- full screen: the same controls, in negative over the picture ---------- */

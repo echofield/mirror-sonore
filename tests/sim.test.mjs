@@ -177,6 +177,18 @@ click(Array.prototype.find.call($('modes').children, b => b.textContent === 'Wav
 
 check(['modes', 'miniModes'].every(id => Array.prototype.find.call($(id).children, b => b.textContent === 'Wave').classList.contains('hot')), 'Wave is marked in both mode pickers');
 
+// a second picture laid over the first
+w.Image = class { set src(v) { this.naturalWidth = 640; this.naturalHeight = 480; _st(() => this.onload && this.onload(), 0); } };
+const pick = (id, file) => { Object.defineProperty($(id), 'files', { value: [file], configurable: true }); $(id).dispatchEvent(new w.Event('change')); };
+check($('overBox').hidden && w.__ms.U.layer === 0, 'no second picture to begin with');
+pick('img2In', new w.File(['x'], 'ink.png', { type: 'image/png' })); await tick(); await tick(); await run(1.2);
+check(!$('overBox').hidden && $('img2Name').textContent === 'ink.png' && Math.abs(w.__ms.U.layer - .5) < .03 && w.__ms.V.behind > .5,
+  'a second picture is laid over the first at 50%, and Wave shows it behind the bars (Behind ' + w.__ms.V.behind.toFixed(2) + ')');
+click(Array.prototype.find.call($('blends').children, b => b.dataset.v === 'Multiply'));
+check(w.__ms.G.blend === 'Multiply' && pressedIn('blends') === 'Multiply', 'the blend can be changed: ' + w.__ms.G.blend);
+click($('img2Clear')); await run(.2);
+check($('overBox').hidden && w.__ms.U.layer === 0 && !w.__ms.G.layer, 'removing it leaves the first picture alone');
+
 // VHS: the mode brings the tape with it; the Tape fader lays it over any other mode
 click(Array.prototype.find.call($('modes').children, b => b.textContent === 'VHS')); await run(.5);
 check($('lookBadge').textContent.includes('VHS') && w.__ms.U.tape >= .85, 'VHS mode plays the picture through the tape (tape ' + w.__ms.U.tape.toFixed(2) + ')');

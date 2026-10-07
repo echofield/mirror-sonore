@@ -1,14 +1,14 @@
 // Boot and the frame loop. Order per frame: clock → analysis → Auto → mapping → render → HUD → recording.
-import { G, SESSION, U, V, S, PUMP, BEAT, WV, HAND } from './state.js';
+import { G, P, A, SESSION, U, V, S, PUMP, BEAT, WV, HAND } from './state.js';
 import { handTick } from './hands.js';
-import { initRenderer, uploadImage, useVideo, render } from './gl/renderer.js';
+import { initRenderer, uploadImage, uploadOver, useVideo, render } from './gl/renderer.js';
 import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
 import { makeSampleLoop } from './audio/sample-loop.js';
 import { makeSampleImage } from './image/sample-image.js';
 import { extractPalette } from './image/palette.js';
 import { step, reactKick, reactSnare } from './map.js';
 import { setDirection, setAuto, autoTick, autoOnKick, autoOnDrop, applyPalette } from './auto.js';
-import { initUI, el, toast, setPlaying, setSoundReady, updateHUD, updatePictureSwatch, drawThumb, setFill, syncExport } from './ui.js';
+import { initUI, el, toast, setPlaying, setSoundReady, updateHUD, updatePictureSwatch, drawThumb, setFill, syncExport, syncUI } from './ui.js';
 import { initView, applySize, adaptQuality } from './view.js';
 import { MIME, EXT, initRecord, canRecord, toggleRecord, recordTick, saveBlob, stopClip, isClipActive, takeStill } from './record.js';
 import { DEFAULT_DIR } from './config.js';
@@ -34,7 +34,7 @@ function boot() {
   initView(canvas);
   initRecord(canvas);
   initUI({
-    togglePlay, routeFile, loadPictureFile, loadSoundFile, applySize, saveBlob, takeStill,
+    togglePlay, routeFile, loadPictureFile, loadSoundFile, loadOverFile, clearOver, applySize, saveBlob, takeStill,
     toggleRecord: () => toggleRecord(soundReady),
     soundReady: () => soundReady, canRecord, isPlaying: () => !audio.paused, ext: MIME ? EXT : ''
   });
@@ -114,6 +114,30 @@ function syncVideo(playing) {
   if (!video.seeking && Math.abs(video.currentTime - want) > (playing ? .3 : .05)) video.currentTime = want;
 }
 
+// The second picture, laid over the first. In Wave it is the ground behind the bars, so Behind is
+// raised when it arrives; otherwise it would come in almost invisible.
+const NO_OVER = 'None. Lay one over the first.';
+function loadOverFile(file) {
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    uploadOver(img, img.naturalWidth, img.naturalHeight);
+    G.layer = true;
+    if (P.behind < .45) P.behind = .6;
+    drawThumb(img, img.naturalWidth, img.naturalHeight, el.thumb2);
+    el.img2Name.textContent = file.name || 'Image';
+    syncUI();
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('That image could not be opened. Try a JPG, PNG or WebP.'); };
+  img.src = url;
+}
+function clearOver() {
+  G.layer = false;
+  el.img2Name.textContent = NO_OVER;
+  el.thumb2.getContext('2d').clearRect(0, 0, 96, 96);
+  syncUI();
+}
+
 function loadImageFile(file) {
   const url = URL.createObjectURL(file), img = new Image();
   img.onload = () => { dropVideo(); uploadImage(img, img.naturalWidth, img.naturalHeight); el.imgName.textContent = file.name || 'Image'; URL.revokeObjectURL(url); };
@@ -157,5 +181,5 @@ function frame(now) {
 }
 
 // Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
-if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV, HAND };
+if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND };
 boot();

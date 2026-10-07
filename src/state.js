@@ -60,6 +60,9 @@ export const G = {
   W: 720, H: 1280,     // output size (what gets recorded)
   scale: 1,            // preview render scale (adaptive; forced to 1 while recording)
   imgAspect: 1,
+  layer: false,        // a second picture is loaded and laid over the first
+  blend: 'Mix',        // how (see BLENDS)
+  img2Aspect: 1,
   trip: null,          // active trip name, or null
   echoRate: '1/16',    // tracer refresh, in notes (see ECHO_RATES)
   journey: true,       // Journey arc: trip intensity builds, peaks and settles over each clip

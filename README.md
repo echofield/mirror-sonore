@@ -5,6 +5,7 @@ Drop a picture (an image or a video) and a sound. The picture folds, warps and h
 - **Modes:** Mirror, Kaleido, Tunnel, Liquid, Holo (iridescent foil), Fractal (Julia set), Infinite (endless zoom), Wave (the song's waveform, bar by bar, passing like a train from left to right and cut out of the picture), VHS (the picture played back from a worn tape; the Tape fader lays the same tape over any other mode).
 - **Hands:** drag on the picture to play it. Sideways turns it, up and down zooms; two fingers set trails and warp. Let go and it springs back, or switch Latch on and it stays. Auto keeps running underneath.
 - **Picture:** an image, or a video whose frames go through the same modes. A video dropped on the page is used for picture and sound.
+- **Second picture:** lay another image over the first: Mix, Screen (a double exposure) or Multiply (ink over a photo), with an amount. In Wave the bars are cut from the first picture and the second one sits behind them.
 - **Image:** saves the current frame as a PNG at the full export size.
 - **Keep:** stores the whole look (direction, mode, colour, Beat, Pump, Flow, Auto) with a thumbnail. Tap a kept look to bring it back, hold it to remove it. Up to 12, kept in the browser.
 - **Trips:** LSD, Psilocybin, DMT, Mescaline, Ayahuasca, Ketamine: art presets built from research descriptions of each experience's visuals. They add form-constant geometry (flat or funnel-shaped lattices), stepped tracers on the beat, breathing surfaces, and a Journey arc that builds and settles over each clip.

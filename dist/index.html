@@ -174,8 +174,12 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .tile-txt{display:flex;flex-direction:column;min-width:0}
 .tile-txt b{font-family:var(--f-mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .tile-txt span{font-family:var(--f-voice);font-size:17px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.overbox{display:grid;gap:10px;padding:12px 0 4px;justify-items:start}
+.overbox > .opt,.overbox > .faders{width:100%}
 .tile-act{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);padding:9px 10px;border:1px solid var(--line);border-radius:2px;background:var(--well)}
-.tile:hover .tile-act{border-color:var(--blue)}
+.tile:hover .overbox{display:grid;gap:10px;padding:12px 0 4px;justify-items:start}
+.overbox > .opt,.overbox > .faders{width:100%}
+.tile-act{border-color:var(--blue)}
 
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;border:1px solid var(--line);background:var(--well);border-radius:2px;padding:0 12px 0 8px;font-size:13.5px;font-weight:500}
@@ -291,7 +295,9 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
   .rack[data-tab="export"] .sec[data-tab="export"]{display:flex}
   .chip,.modegrid button,.seg button{min-height:42px}
   .fader input{height:42px}
-  .tile-act{padding:12px}
+  .overbox{display:grid;gap:10px;padding:12px 0 4px;justify-items:start}
+.overbox > .opt,.overbox > .faders{width:100%}
+.tile-act{padding:12px}
 }
 
 /* ---------- full screen: the same controls, in negative over the picture ---------- */
@@ -430,6 +436,18 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
           <span class="tile-act">Choose</span>
           <input class="vh" id="sndIn" type="file" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac">
         </label>
+        <label class="tile" for="img2In">
+          <canvas class="thumb" id="thumb2" width="96" height="96"></canvas>
+          <span class="tile-txt"><b>Second picture</b><span id="img2Name">None. Lay one over the first.</span></span>
+          <span class="tile-act">Choose</span>
+          <input class="vh" id="img2In" type="file" accept="image/*">
+        </label>
+        <div class="overbox" id="overBox" hidden>
+          <div class="opt"><span>Blend</span><div class="seg sm" id="blends" role="group" aria-label="How the second picture is laid over the first"></div></div>
+          <div class="faders" id="overfx"></div>
+          <p class="note">Mix shows both, Screen keeps the light of each, Multiply keeps the dark. In Wave the bars are the first picture and this one is the ground: Behind sets how bright.</p>
+          <button class="qbtn" id="img2Clear" type="button">Remove the second picture</button>
+        </div>
       </div>
       <p class="note">The picture can be an image or a video. The sound can be a track or a video's own sound. Dropping a video onto the page uses it for both.</p>
     </section>
@@ -652,6 +670,10 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
   var WAVEFX = [
     { k: "behind", label: "Behind", min: 0, max: 0.8, step: 0.01, fmt: pct }
   ];
+  var BLENDS = ["Mix", "Screen", "Multiply"];
+  var LAYERFX = [
+    { k: "over", label: "Amount", min: 0, max: 1, step: 0.01, fmt: pct }
+  ];
   var WAVE_LABELS = { warp: "Height", spin: "Speed" };
   var TRIPFX = [
     { k: "lattice", label: "Geometry", min: 0, max: 1, step: 0.01, fmt: pct },
@@ -676,6 +698,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     "glow",
     "tape",
     "behind",
+    "over",
     "holo",
     "bands",
     "sparkle",
@@ -704,6 +727,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     glow: 0.35,
     tape: 0,
     behind: 0.1,
+    over: 0.5,
     holo: 0.84,
     bands: 1.1,
     sparkle: 0.73,
@@ -795,6 +819,11 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
     scale: 1,
     // preview render scale (adaptive; forced to 1 while recording)
     imgAspect: 1,
+    layer: false,
+    // a second picture is loaded and laid over the first
+    blend: "Mix",
+    // how (see BLENDS)
+    img2Aspect: 1,
     trip: null,
     // active trip name, or null
     echoRate: "1/16",
@@ -937,6 +966,7 @@ uniform vec3 uP0; uniform vec3 uP1; uniform vec3 uP2; uniform vec3 uP3; uniform 
 uniform float uAspect, uT, uMode, uSeg, uZoom, uRot, uWarp, uTwist, uTrail, uHue, uChroma, uBright, uContrast, uSat, uTunZ, uFb, uFbRot;
 uniform float uPalMix, uPalPhase, uSlice, uSliceSeed, uHolo, uBands, uSparkle, uBump, uPokeAmp, uWaveAmp, uWaveT, uWaveN, uWaveBehind;
 uniform sampler2D uEchoTex; uniform float uLattice, uLatScale, uLatWarp, uEcho, uBreath;   // trip layer
+uniform sampler2D uImg2; uniform float uAspect2, uLayer, uLayerMode, uLayerOn;              // a second picture over the first
 
 float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
@@ -967,6 +997,10 @@ float hf(vec2 v, float amp, float t){
   return h + uPokeAmp*0.09*sin(d*24.0 - uPoke.z*13.0)*exp(-uPoke.z*1.6)*front; }
 // Hexagonal lattice (Kl\xFCver's honeycomb form constant): local coords in xy, cell id in zw.
 const vec2 HS = vec2(1.0, 1.7320508);
+// The second picture over the first: 0 Mix, 1 Screen, 2 Multiply; uLayer is how much.
+vec3 over(vec3 a, vec3 b){
+  vec3 m = uLayerMode < 0.5 ? b : (uLayerMode < 1.5 ? 1.0 - (1.0 - a)*(1.0 - b) : a*b);
+  return mix(a, m, uLayer); }
 float hexDist(vec2 p){ p = abs(p); return max(dot(p, HS*0.5), p.x); }
 vec4 hexCell(vec2 p){
   vec4 hc = floor(vec4(p, p - vec2(0.5, 1.0))/HS.xyxy) + 0.5;
@@ -1007,6 +1041,7 @@ void main(){
     float b2 = vnoise(vec2(bq.x*5.0 + 3.0, bq.y*70.0));
     n = normalize(n + vec3(b1 - 0.5, b2 - 0.5, 0.0)*uBump*0.5 + vec3(uTilt*0.8, 0.0));
     vec3 img = texture2D(uImg, clamp(iuv, 0.0, 1.0)).rgb;
+    if(uLayerOn > 0.5) img = over(img, texture2D(uImg2, clamp(iuv, 0.0, 1.0)).rgb);
     vec3 L = normalize(vec3(-0.4, 0.6, 0.7));
     float ndv = max(n.z, 0.0);
     float film = ((1.0 - ndv)*10.0 + h0*5.0 + dot(n.xy, vec2(0.7, 0.4))*3.0 + dot(iuv, vec2(0.9, 1.3))*1.2)*uBands + uT*0.05 + uPalPhase;
@@ -1036,6 +1071,7 @@ void main(){
     }
     vec2 tuv = vec2(tz.x/(0.84*uAspect), tz.y/0.84) + 0.5 + uDrift*0.3;
     vec3 img = texture2D(uImg, mr(tuv)).rgb;
+    if(uLayerOn > 0.5) img = over(img, texture2D(uImg2, mr(tuv)).rgb);
     vec3 esc = texture2D(uImg, mr(vec2(sm*0.04 + uT*0.02, 0.5 + 0.3*sin(sm*0.3)) + uDrift)).rgb*(0.38 + 0.22*sin(sm*0.5 + uT));
     float depth = 1.0 - clamp(trapI/32.0, 0.0, 1.0)*0.75;
     col = trapI < 0.0 ? esc : img*depth;
@@ -1093,8 +1129,13 @@ void main(){
     col.r = texture2D(uImg, mr(uv + dir)).r;
     col.g = texture2D(uImg, mr(uv)).g;
     col.b = texture2D(uImg, mr(uv - dir)).b;
+    bool wave = uMode > 6.5 && uMode < 7.5;
+    vec3 c2 = vec3(0.0);
+    if(uLayerOn > 0.5) c2 = texture2D(uImg2, mr(vec2(q.x/uAspect2, q.y) + 0.5)).rgb;
+    if(uLayerOn > 0.5 && !wave) col = over(col, c2);
     col = gradeMap(col);
-    if(uMode > 6.5 && uMode < 7.5) col = mix(mix(uBg, col, uWaveBehind), col*(1.0 - 0.35*wtail), wm);
+    // Wave: the bars are the first picture; around them, the second picture if there is one, else the first, dimmed by Behind
+    if(wave) col = mix(mix(uBg, uLayerOn > 0.5 ? gradeMap(c2) : col, uWaveBehind), col*(1.0 - 0.35*wtail), wm);
   }
 
   col = hueRot(col, uHue);
@@ -1212,6 +1253,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
   var POST;
   var COPY;
   var imgTex;
+  var img2Tex;
   var waveTex;
   var aniso;
   var fbType;
@@ -1244,6 +1286,10 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     fbType = detectHalfFloat();
     imgTex = gl.createTexture();
+    img2Tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, img2Tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    clampLinear();
     waveTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, waveTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, WAVE_N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, WV.tex);
@@ -1338,13 +1384,12 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     echo = makeTarget(w, h);
     last = 0;
   }
-  function uploadImage(src, w, h) {
-    vid = null;
-    const size = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096 ? 2048 : 1024;
+  function putImage(tex, src, max) {
+    const size = gl.getParameter(gl.MAX_TEXTURE_SIZE) >= 4096 ? max : 1024;
     const c = document.createElement("canvas");
     c.width = c.height = size;
     c.getContext("2d").drawImage(src, 0, 0, size, size);
-    gl.bindTexture(gl.TEXTURE_2D, imgTex);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -1354,8 +1399,16 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     if (aniso) gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+  }
+  function uploadImage(src, w, h) {
+    vid = null;
+    putImage(imgTex, src, 2048);
     G.imgAspect = w / h;
     if (onThumb) onThumb(src, w, h);
+  }
+  function uploadOver(src, w, h) {
+    putImage(img2Tex, src, 1024);
+    G.img2Aspect = w / h;
   }
   function useVideo(video2, w, h) {
     vid = video2;
@@ -1393,6 +1446,13 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, echo.t);
     ui1(MAIN, "uEchoTex", 2);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, img2Tex);
+    ui1(MAIN, "uImg2", 4);
+    u1(MAIN, "uAspect2", G.img2Aspect);
+    u1(MAIN, "uLayer", U.layer);
+    u1(MAIN, "uLayerMode", BLENDS.indexOf(G.blend));
+    u1(MAIN, "uLayerOn", G.layer ? 1 : 0);
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, waveTex);
     ui1(MAIN, "uWave", 3);
@@ -2012,6 +2072,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     U.jy = jr * Math.sin(S.jul);
     U.grain = V.grain * (0.75 + 0.7 * ht + 0.3 * hi);
     U.glow = V.glow * (0.6 + 0.8 * drop) * (1 + Math.max(0, pm.b) * 3);
+    U.layer = G.layer ? V.over : 0;
     U.tape = P.mode === VHS ? Math.max(V.tape, 0.85) : V.tape;
     U.tapeHit = clamp2(0.9 * sn + 0.5 * k + drop + cut);
     const nb = 8 * Math.round(P.seg);
@@ -2089,6 +2150,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       trip: G.trip,
       echoRate: G.echoRate,
       journey: G.journey,
+      blend: G.blend,
       pump: { style: PUMP.style, len: PUMP.len },
       auto: { on: AUTO.on, bars: AUTO.bars, trans: AUTO.trans },
       thumb: thumbOf(canvas3)
@@ -2112,7 +2174,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     write();
   }
   var RANGE = {};
-  [MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX].forEach((defs) => defs.forEach((d) => {
+  [MACROS, FEEL, TEX, FOIL, TRIPFX, WAVEFX, LAYERFX].forEach((defs) => defs.forEach((d) => {
     RANGE[d.k] = d;
   }));
   var num = (v, d, lo, hi) => typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
@@ -2128,6 +2190,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     G.trip = TRIPS[k.trip] ? k.trip : null;
     if (ECHO_RATES[k.echoRate]) G.echoRate = k.echoRate;
     if (typeof k.journey === "boolean") G.journey = k.journey;
+    if (BLENDS.indexOf(k.blend) >= 0) G.blend = k.blend;
     G.dir = k.dir;
     applyPalette();
     S.hueKick = 0;
@@ -2178,6 +2241,13 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       "latchT",
       "latchT2",
       "wavefx",
+      "thumb2",
+      "img2Name",
+      "img2In",
+      "overBox",
+      "blends",
+      "overfx",
+      "img2Clear",
       "lKick",
       "lSnare",
       "lHat",
@@ -2271,6 +2341,12 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     buildFaders(el.foil, FOIL, null);
     buildFaders(el.tripfx, TRIPFX, null);
     buildFaders(el.wavefx, WAVEFX, null);
+    buildFaders(el.overfx, LAYERFX, null);
+    BLENDS.forEach((b) => addBtn(el.blends, b, b, () => {
+      G.blend = b;
+      syncUI();
+    }));
+    el.img2Clear.addEventListener("click", () => H.clearOver());
     el.segIn.addEventListener("input", () => {
       P.seg = parseInt(el.segIn.value, 10);
       el.segOut.textContent = P.mode === WAVE ? 8 * P.seg : P.seg;
@@ -2351,6 +2427,11 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     el.sndIn.addEventListener("change", (e) => {
       const f = e.target.files[0];
       if (f) H.loadSoundFile(f);
+      e.target.value = "";
+    });
+    el.img2In.addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (f) H.loadOverFile(f);
       e.target.value = "";
     });
     initDrop();
@@ -2454,7 +2535,12 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     Punch: "On each kick the picture zooms in and flashes, then relaxes.",
     Breathe: "The picture follows the bass smoothly, without a hard hit on the kick."
   };
+  function syncLayer() {
+    el.overBox.hidden = !G.layer;
+    pressed(el.blends, G.blend);
+  }
   function syncTrip() {
+    syncLayer();
     pressed(el.trips, G.trip || "None");
     pressed(el.miniTrips, G.trip || "None");
     pressed(el.echoRate, G.echoRate);
@@ -2717,8 +2803,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       else toast("Clip ready. Find it under Export.");
     }
   }
-  function drawThumb(src, w, h) {
-    const g = el.thumb.getContext("2d"), s = Math.min(w, h);
+  function drawThumb(src, w, h, canvas3) {
+    const g = (canvas3 || el.thumb).getContext("2d"), s = Math.min(w, h);
     g.clearRect(0, 0, 96, 96);
     g.drawImage(src, (w - s) / 2, (h - s) / 2, s, s, 0, 0, 96, 96);
   }
@@ -3265,6 +3351,8 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
       routeFile,
       loadPictureFile,
       loadSoundFile,
+      loadOverFile,
+      clearOver,
       applySize,
       saveBlob,
       takeStill,
@@ -3388,6 +3476,30 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     const want = audio.currentTime % video.duration;
     if (!video.seeking && Math.abs(video.currentTime - want) > (playing ? 0.3 : 0.05)) video.currentTime = want;
   }
+  var NO_OVER = "None. Lay one over the first.";
+  function loadOverFile(file) {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      uploadOver(img, img.naturalWidth, img.naturalHeight);
+      G.layer = true;
+      if (P.behind < 0.45) P.behind = 0.6;
+      drawThumb(img, img.naturalWidth, img.naturalHeight, el.thumb2);
+      el.img2Name.textContent = file.name || "Image";
+      syncUI();
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      toast("That image could not be opened. Try a JPG, PNG or WebP.");
+    };
+    img.src = url;
+  }
+  function clearOver() {
+    G.layer = false;
+    el.img2Name.textContent = NO_OVER;
+    el.thumb2.getContext("2d").clearRect(0, 0, 96, 96);
+    syncUI();
+  }
   function loadImageFile(file) {
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
@@ -3443,7 +3555,7 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     adaptQuality(dt, now, SESSION.active);
     requestAnimationFrame(frame);
   }
-  if (window.__MS_TEST__) window.__ms = { U, V, S, G, PUMP, BEAT, WV, HAND };
+  if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND };
   boot();
 })();
 </script>
