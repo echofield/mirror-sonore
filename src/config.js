@@ -172,5 +172,7 @@ export const FORMATS = { '9:16': [9, 16], '1:1': [1, 1], '4:5': [4, 5] };
 export const QUALS = { '720p': 720, '1080p': 1080 };
 export const LENS = { '15s': 15, '30s': 30, '60s': 60, 'Full': 0 };
 export const CLIPS = [1, 3, 5];
+// How a clip is made when it can be rendered frame by frame: played once by hand first, or straight away.
+export const CAPTURES = ['Perform', 'Instant'];
 export const BARS = [4, 8, 16];
 export const TRANSITIONS = ['Morph', 'Cut'];

@@ -64,8 +64,10 @@ export function centreHands() { NAMES.forEach(n => { HAND.t[n] = 0; }); rebase()
 
 // Every frame: held keys push, free hands spring back, the picture follows with a little weight.
 export function handTick(dt) {
-  const driven = { spin: pts.size > 0, zoom: pts.size > 0, warp: pts.size > 1, trails: pts.size > 1 };
-  for (const key in keys) {
+  // while a take is rendered the targets are the ones that were played; nothing held now may move them
+  const driven = HAND.replay ? { spin: true, zoom: true, warp: true, trails: true }
+    : { spin: pts.size > 0, zoom: pts.size > 0, warp: pts.size > 1, trails: pts.size > 1 };
+  if (!HAND.replay) for (const key in keys) {
     const n = keys[key];
     HAND.t[n] = clamp1(HAND.t[n] + ARROWS[key][0] * KEY_RATE * dt);
     driven[n] = true;

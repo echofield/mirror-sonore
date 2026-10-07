@@ -1,5 +1,5 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
-import { MODES, MARKED_MODES, FOLD_MODES, HOLO, WAVE, WAVEFX, WAVE_LABELS, BLENDS, LAYERFX, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
+import { CAPTURES, MODES, MARKED_MODES, FOLD_MODES, HOLO, WAVE, WAVEFX, WAVE_LABELS, BLENDS, LAYERFX, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
 import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP, HAND } from './state.js';
 import { initHands, handKey, wasDrag, setLatch, centreHands } from './hands.js';
 import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
@@ -16,7 +16,7 @@ export function initUI(handlers) {
   ['monitor', 'view', 'safe', 'lookBadge', 'bigPlay', 'bigPlayLbl', 'recBadge', 'recTime', 'recBar', 'recFill', 'exitFs',
    'side', 'playBtn', 'playIcon', 'scrub', 'tCur', 'tDur', 'macros', 'autoT', 'shuffle', 'fsBtn', 'miniDirs', 'miniModes', 'miniKept', 'recMini', 'recMiniLbl',
    'shotBtn', 'keepBtn', 'kept', 'keptNote', 'pad', 'latchT', 'latchT2', 'wavefx',
-   'thumb2', 'img2Name', 'img2In', 'overBox', 'blends', 'overfx', 'img2Clear', 'songWave', 'bestBtn',
+   'thumb2', 'img2Name', 'img2In', 'overBox', 'blends', 'overfx', 'img2Clear', 'songWave', 'bestBtn', 'capRow', 'caps',
    'lKick', 'lSnare', 'lHat', 'lDrop', 'bpm', 'mLow', 'mMid', 'mHigh', 'tabs', 'rack', 'thumb', 'imgName', 'sndName', 'imgIn', 'sndIn',
    'trips', 'tripDesc', 'tripfx', 'echoRate', 'journeyT', 'miniTrips',
    'dirs', 'bars', 'trans', 'autoNote', 'pumpStyle', 'pumpLen', 'pumpNote', 'miniPump', 'modes', 'foldRow', 'segIn', 'segOut', 'feel', 'tex', 'foilWrap', 'foil',
@@ -65,6 +65,7 @@ export function initUI(handlers) {
   Object.keys(QUALS).forEach(v => addBtn(el.quals, v, v, () => { if (SESSION.active) return; OUT.q = v; H.applySize(); syncExport(); }));
   Object.keys(LENS).forEach(v => addBtn(el.lens, v, v, () => { if (SESSION.active) return; OUT.len = v; H.lengthChanged(); syncExport(); }));
   el.bestBtn.addEventListener('click', () => H.bestClip());
+  CAPTURES.forEach(c => addBtn(el.caps, c, c, () => { if (SESSION.active) return; OUT.capture = c; syncExport(); }));
   CLIPS.forEach(n => addBtn(el.clips, n, String(n), () => { if (SESSION.active) return; OUT.clips = n; syncExport(); }));
   el.safeT.addEventListener('change', syncExport);
 
@@ -228,10 +229,17 @@ export function syncExport() {
   el.safe.hidden = !(el.safeT.checked && OUT.fmt === '9:16');
   el.spec.textContent = `${G.W} × ${G.H} · 30 fps` + (H.ext ? ' · ' + H.ext.toUpperCase() : '');
   if (!SESSION.active) {
+    // with a browser that can write the clip frame by frame: perform it first, or have it rendered at once
+    const exact = H.exactReady(), instant = exact && OUT.capture === 'Instant', verb = instant ? 'Render' : 'Record';
+    el.capRow.hidden = !exact; pressed(el.caps, OUT.capture);
+    el.recNote.textContent = !exact
+      ? 'Recording captures picture and sound together as they play, from the start of the clip. With 3 or 5 clips, each one replays the same stretch with a new look. Keep this screen open while it records.'
+      : instant ? 'The clip on the song bar is rendered straight away, frame by frame at full size, however fast this device is. With 3 or 5 clips, each one gets a new look.'
+      : 'Play the clip once, hands on the picture. When it ends it is rendered frame by frame at full size, however fast this device is. With 3 or 5 clips, the others are the same hands with new looks.';
     const len = OUT.len === 'Full' ? 'full track' : OUT.len;
-    el.recLbl.textContent = OUT.clips > 1 ? `Record ${OUT.clips} clips · ${len}` : `Record ${len}`;
+    el.recLbl.textContent = OUT.clips > 1 ? `${verb} ${OUT.clips} clips · ${len}` : `${verb} ${len}`;
     el.bestBtn.textContent = OUT.len === 'Full' ? 'Best' : 'Best ' + OUT.len;
-    el.recMiniLbl.textContent = 'Record ' + (OUT.len === 'Full' ? 'full' : OUT.len);
+    el.recMiniLbl.textContent = verb + ' ' + (OUT.len === 'Full' ? 'full' : OUT.len);
   }
 }
 export function lockExport(on) {
@@ -239,13 +247,14 @@ export function lockExport(on) {
   el.scrub.disabled = on;
   el.playBtn.disabled = on || !H.soundReady();
 }
-export function setRecUI(on, n, total) {
+// label: what the button does now, when it is not "Stop" (Finish the take, Cancel)
+export function setRecUI(on, n, total, label) {
   el.recBtn.classList.toggle('on', on); el.recMini.classList.toggle('on', on);
   el.recBadge.hidden = !on; el.recBar.hidden = !on;
   if (on) {
     el.recFill.style.transform = 'scaleX(0)';
-    el.recLbl.textContent = total > 1 ? `Stop · clip ${n} of ${total}` : 'Stop recording';
-    el.recMiniLbl.textContent = 'Stop';
+    el.recLbl.textContent = (label || (total > 1 ? 'Stop' : 'Stop recording')) + (total > 1 ? ` · clip ${n} of ${total}` : '');
+    el.recMiniLbl.textContent = label || 'Stop';
     el.bigPlay.hidden = true;
   } else syncExport();
 }

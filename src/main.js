@@ -5,7 +5,7 @@ import { LENS } from './config.js';
 import { handTick } from './hands.js';
 import { initSongBar, drawSongBar } from './songbar.js';
 import { initRenderer, uploadImage, uploadOver, useVideo, render } from './gl/renderer.js';
-import { audio, ensureCtx, analyse, on, resetAnalysis } from './audio/engine.js';
+import { audio, ensureCtx, analyse, analyseAt, on, resetAnalysis } from './audio/engine.js';
 import { makeSampleLoop } from './audio/sample-loop.js';
 import { makeSampleImage } from './image/sample-image.js';
 import { extractPalette } from './image/palette.js';
@@ -13,7 +13,9 @@ import { step, reactKick, reactSnare } from './map.js';
 import { setDirection, setAuto, autoTick, autoOnKick, autoOnDrop, applyPalette } from './auto.js';
 import { initUI, el, toast, setPlaying, setSoundReady, updateHUD, updatePictureSwatch, drawThumb, setFill, syncExport, syncUI } from './ui.js';
 import { initView, applySize, adaptQuality } from './view.js';
-import { MIME, EXT, initRecord, canRecord, toggleRecord, recordTick, saveBlob, stopClip, isClipActive, takeStill } from './record.js';
+import { MIME, EXT, initRecord, canRecord, toggleRecord, recordTick, saveBlob, stopClip, takeStill, refreshExact, exactReady, pageHidden, TESTING } from './record.js';
+import { exactSupport } from './exact.js';
+import { TAKE } from './take.js';
 import { DEFAULT_DIR } from './config.js';
 
 let soundURL = null, soundReady = false, scrubbing = false;
@@ -23,7 +25,18 @@ let soundURL = null, soundReady = false, scrubbing = false;
 const video = document.createElement('video');
 video.muted = true; video.loop = true; video.playsInline = true; video.preload = 'auto';
 video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
-let videoURL = null, videoOn = false;
+let videoURL = null, qualityChosen = false;
+
+// One frame of the engine at a chosen moment of the song, with nothing read from the page's clocks.
+// A clip rendered frame by frame is made of these (record.js).
+function exactFrame(t, dt, ms, auto) {
+  G.clock += dt;
+  analyseAt(t, dt);
+  if (auto) autoTick(true);
+  handTick(dt);
+  step(dt);
+  render(ms);
+}
 
 function boot() {
   const canvas = document.getElementById('view');
@@ -35,9 +48,10 @@ function boot() {
   });
   if (err) { document.getElementById('monitor').innerHTML = '<p class="err">' + err + '</p>'; return; }
   initView(canvas);
-  initRecord(canvas);
+  initRecord(canvas, exactFrame);
   initUI({
-    togglePlay, routeFile, loadPictureFile, loadSoundFile, loadOverFile, clearOver, applySize, saveBlob, takeStill,
+    togglePlay, routeFile, loadPictureFile, loadSoundFile, loadOverFile, clearOver, saveBlob, takeStill, exactReady,
+    applySize: () => { qualityChosen = true; applySize(); refreshExact().then(syncExport); },
     lengthChanged: () => placeClip(CLIP.start),
     bestClip: () => { if (SONG.score && !SESSION.active) { placeClip(bestStart(SONG.score, LENS[OUT.len] || 0)); audio.currentTime = CLIP.start; } },
     toggleRecord: () => toggleRecord(soundReady),
@@ -60,7 +74,7 @@ function boot() {
 
   audio.addEventListener('play', () => setPlaying(true));
   audio.addEventListener('pause', () => setPlaying(false));
-  audio.addEventListener('ended', () => { if (isClipActive()) stopClip(); });
+  audio.addEventListener('ended', () => { if (SESSION.active) stopClip(); });
   audio.addEventListener('error', () => { if (audio.src) toast('That sound could not be played. Try an MP3, WAV or M4A file.'); });
   audio.addEventListener('loadedmetadata', () => { el.tDur.textContent = fmtT(audio.duration); });
   el.scrub.addEventListener('pointerdown', () => { scrubbing = true; });
@@ -70,9 +84,7 @@ function boot() {
     setFill(el.scrub);
     if (isFinite(audio.duration) && !SESSION.active) audio.currentTime = el.scrub.value / 1000 * audio.duration;
   });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && SESSION.active) { SESSION.cancel = true; stopClip(); toast('Recording stopped because the page went to the background. Finished clips are kept.'); }
-  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pageHidden(); });
 
   const sample = makeSampleImage();
   uploadImage(sample, sample.width, sample.height);
@@ -80,6 +92,8 @@ function boot() {
   setAuto(true);
   applySize();
   syncExport();
+  // A browser that can write the clip frame by frame gets full HD as the default, since the device's speed no longer matters.
+  exactSupport(1080, 1920).then(c => { if (c && !qualityChosen && OUT.q === '720p') { OUT.q = '1080p'; applySize(); } return refreshExact(); }).then(syncExport);
   requestAnimationFrame(frame);
   makeSampleLoop().then(blob => {
     if (!soundReady) setSound(blob, 'Sample loop · 120 BPM');
@@ -100,7 +114,7 @@ function togglePlay() {
 const isVideo = f => (f.type || '').indexOf('video/') === 0 || /\.(mp4|mov|m4v|webm)$/i.test(f.name || '');
 function loadPictureFile(file) { if (isVideo(file)) loadVideoFile(file); else loadImageFile(file); }
 function dropVideo() {
-  videoOn = false; video.pause();
+  G.videoOn = false; video.pause();
   if (videoURL) { URL.revokeObjectURL(videoURL); videoURL = null; video.removeAttribute('src'); video.load(); }
 }
 function loadVideoFile(file) {
@@ -109,7 +123,7 @@ function loadVideoFile(file) {
   videoURL = url;
   video.onloadeddata = () => {
     if (videoURL !== url || !video.videoWidth) return;
-    videoOn = true;
+    G.videoOn = true;
     useVideo(video, video.videoWidth, video.videoHeight);
     el.imgName.textContent = file.name || 'Video';
   };
@@ -119,7 +133,7 @@ function loadVideoFile(file) {
   const p = video.play(); if (p && p.then) p.then(() => { if (audio.paused) video.pause(); }).catch(() => {});
 }
 function syncVideo(playing) {
-  if (!videoOn || !(video.duration > 0)) return;
+  if (!G.videoOn || !(video.duration > 0)) return;
   if (playing && video.paused) { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
   else if (!playing && !video.paused) video.pause();
   const want = audio.currentTime % video.duration;
@@ -170,6 +184,7 @@ async function readSong(blob) {
     const score = await scanTrack(buffer, p => { if (my === songSeq) SONG.progress = p; });
     if (my !== songSeq) return;
     Object.assign(SONG, { state: 'ready', progress: 1, buffer, score });
+    syncExport();
     placeClip(bestStart(score, LENS[OUT.len] || 0));
     el.bestBtn.disabled = false;
     if (audio.paused) audio.currentTime = CLIP.start;
@@ -210,6 +225,7 @@ function routeFile(f) {
 let prevNow = performance.now();
 function frame(now) {
   const dt = Math.min(.05, Math.max(.001, (now - prevNow) / 1000)); prevNow = now;
+  if (G.exact) { requestAnimationFrame(frame); return; }      // a clip is being rendered: the picture belongs to it
   const playing = !audio.paused;
   if (playing) G.clock += dt;
   // the clip plays in a loop, so what is heard is what a recording will hold
@@ -231,5 +247,5 @@ function frame(now) {
 }
 
 // Test hook: tests/sim.test.mjs sets window.__MS_TEST__ to read live values. Inert otherwise.
-if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, PUMP, BEAT, WV, HAND, SONG, CLIP };
+if (window.__MS_TEST__) window.__ms = { U, V, S, G, A, P, PUMP, BEAT, WV, HAND, SONG, CLIP, OUT, TAKE, rec: TESTING };
 boot();

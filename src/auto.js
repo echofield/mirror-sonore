@@ -5,9 +5,12 @@
 import { DIRS, TRIPS, DEFAULT_DIR, HAND_MODES } from './config.js';
 import { P, S, A, G, AUTO, BEAT, PUMP } from './state.js';
 import { syncUI, setAutoUI } from './ui.js';
+import { RNG } from './rng.js';
 
-const rnd = (a, b) => a + Math.random() * (b - a);
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const rnd = (a, b) => a + RNG.looks.next() * (b - a);
+const pick = arr => arr[Math.floor(RNG.looks.next() * arr.length)];
+// How the look just applied landed (dissolve, flash, new seed, jump of the drift), for a take to write down.
+function landed(drift0) { G.lookSeq++; G.lookImp = { morph: S.morph, cut: A.cut, tau: G.easeTau, seed: S.seed, drift: S.drift - drift0 }; }
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
@@ -17,7 +20,7 @@ export function lookFor(name, o = {}) {
   const soft = T ? !!T.soft : !!D.soft;
   const modes = T ? T.modes : D.modes;
   let mode = o.signature ? modes[0] : pick(modes);
-  if ((o.change && Math.random() < .65) || o.big) {
+  if ((o.change && RNG.looks.next() < .65) || o.big) {
     const others = modes.filter(m => m !== P.mode);
     if (others.length) mode = pick(others);
   }
@@ -45,12 +48,13 @@ export function lookFor(name, o = {}) {
 
 // how: 'auto' (beat-synced, uses the chosen transition), 'shuffle', or 'user' (direct, no transition).
 export function applyLook(L, how) {
-  const modeChanged = L.mode !== undefined && L.mode !== P.mode;
+  const modeChanged = L.mode !== undefined && L.mode !== P.mode, drift0 = S.drift;
   Object.keys(L).forEach(k => { P[k] = L[k]; });
   if (how === 'user') { G.easeTau = .1; }
   else if (AUTO.trans === 'Morph') { G.easeTau = .9; S.morph = 1; A.cut = Math.max(A.cut, .2); }
-  else { G.easeTau = .15; A.cut = 1; S.seed = Math.random() * 100; S.drift += rnd(3, 12); }
+  else { G.easeTau = .15; A.cut = 1; S.seed = RNG.looks.next() * 100; S.drift += rnd(3, 12); }
   if (how !== 'user' && modeChanged && AUTO.trans === 'Morph') S.drift += rnd(.3, 1);
+  landed(drift0);
   syncUI();
 }
 
@@ -97,6 +101,7 @@ export function setMode(i) {
   P.mode = i;
   if (AUTO.on) setAuto(false);
   S.morph = .6;          // a short dissolve even for manual mode changes
+  landed(S.drift);
   syncUI();
 }
 

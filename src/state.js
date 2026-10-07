@@ -26,7 +26,7 @@ export const WV = { hist: new Float32Array(WAVE_N), tex: new Uint8Array(WAVE_N *
 
 // The hands: offsets played on top of the look by dragging on the picture or holding the arrow keys
 // (see hands.js). t is where the hand is going, v where the picture is, each from -1 to 1.
-export const HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0, zoom: 0, warp: 0, trails: 0 }, latch: false, active: false };
+export const HAND = { t: { spin: 0, zoom: 0, warp: 0, trails: 0 }, v: { spin: 0, zoom: 0, warp: 0, trails: 0 }, latch: false, active: false, replay: false };   // replay: the targets come from a take being rendered
 
 // Pump style and length are the user's, like Beat/Pump/Flow: Auto never changes them.
 export const PUMP = { style: 'Punch', len: '1/8' };
@@ -51,7 +51,7 @@ export const SONG = { state: 'none', progress: 0, buffer: null, score: null };
 // The clip: the stretch of the song that plays in a loop and gets recorded. len 0 means the whole track.
 export const CLIP = { start: 0, len: 15 };
 export const AUTO = { on: true, bars: 4, armed: false, armedAt: 0, phraseStart: 0, trans: 'Morph' };
-export const OUT = { fmt: '9:16', q: '720p', len: '15s', clips: 1 };
+export const OUT = { fmt: '9:16', q: '720p', len: '15s', clips: 1, capture: 'Perform' };
 export const SESSION = { active: false, total: 1, done: 0, start: 0, cancel: false, stream: null };
 
 // Per-frame uniform values computed by map.js.
@@ -69,6 +69,10 @@ export const G = {
   W: 720, H: 1280,     // output size (what gets recorded)
   scale: 1,            // preview render scale (adaptive; forced to 1 while recording)
   imgAspect: 1,
+  videoOn: false,      // the picture is a video
+  exact: false,        // a clip is being rendered frame by frame: the live frame loop stands still
+  lookSeq: 0,          // counts the looks applied, and lookImp says how the last one landed (written into takes)
+  lookImp: null,
   layer: false,        // a second picture is loaded and laid over the first
   blend: 'Mix',        // how (see BLENDS)
   img2Aspect: 1,

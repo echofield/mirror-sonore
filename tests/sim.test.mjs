@@ -304,6 +304,46 @@ const k0 = counts.k, d0 = counts.d; audioEl[0].currentTime = 9.5;
 await run(5);
 check(counts.k - k0 >= 4 && counts.d - d0 >= 1 && /1(19|20|21) BPM/.test($('bpm').textContent),
   `playing follows the score: ${counts.k - k0} kicks and ${counts.d - d0} drop from 9.5 s to 14.5 s, ${$('bpm').textContent}`);
+// a take, then the render. The browser is said to be able to encode, with a writer that draws every frame
+// but writes no file: everything else (the take, the playback of the take, the way back) is the real thing.
+const REC = w.__ms.rec, MS = w.__ms;
+let drawn = 0;
+REC.exact({ video: 'avc', audio: 'aac' }, async o => { for (let i = 0; i < o.frames; i++) { if (o.stopped()) return null; o.drawFrame(i); drawn++; if (i % 20 === 0) { o.onProgress(i / o.frames); await tick(); } } return new w.Blob(['v'.repeat(3000)]); });
+REC.len(4);
+click($('lens').children[0]);
+check(!$('capRow').hidden && pressedIn('caps') === 'Perform' && $('recLbl').textContent.startsWith('Record'), 'with the song read and an encoder, Capture offers Perform: ' + $('recLbl').textContent);
+click($('clips').children[0]);
+if ($('autoT').getAttribute('aria-pressed') === 'false') click($('autoT'));
+const cards0 = $('results').children.length;
+click($('recBtn')); await run(.3);
+check(REC.phase() === 'take' && $('recLbl').textContent === 'Finish the take' && /^TAKE 0:00 \/ 0:04/.test($('recTime').textContent), 'Record starts a take: ' + $('recTime').textContent);
+click(Array.prototype.find.call($('dirs').children, b => b.dataset.v === 'Gold')); await run(.5);
+warp.value = '0.8'; warp.dispatchEvent(new w.Event('input'));
+key('keydown', 'ArrowUp'); await run(.6); key('keyup', 'ArrowUp'); await run(.5);
+click($('shuffle')); await run(1);
+const atEnd = () => ({ dir: MS.G.dir, mode: MS.P.mode, warp: MS.P.warp, zoom: MS.P.zoom, trails: MS.P.trails, auto: $('autoT').getAttribute('aria-pressed') });
+await run(.9);
+const took = atEnd(), evs = MS.TAKE.events;      // 3.8 s in: nothing more is played before the take ends at 4 s
+await run(.4);
+for (let i = 0; i < 600 && REC.phase(); i++) await tick();
+check(evs.length > 4 && evs.some(e => e.hand) && evs.some(e => e.imp) && evs.some(e => e.g && e.g.dir === 'Gold') && Math.abs(MS.TAKE.len - 4) < .05,
+  `the take wrote down what was played: ${evs.length} events over ${MS.TAKE.len.toFixed(2)} s (hands, looks, the direction)`);
+const end = REC.lastEnd(), same = k => end.p[k] === MS.P[k];
+check(drawn === 120 && end.g.dir === 'Gold' && ['mode', 'warp', 'zoom', 'trails', 'spin', 'glitch', 'punch', 'seg'].every(same),
+  `the render drew ${drawn} frames and ended on the controls the take ended on (${end.g.dir}, mode ${end.p.mode}, warp ${end.p.warp})`);
+const back = atEnd();
+check(JSON.stringify(back) === JSON.stringify(took) && !MS.G.exact && !MS.HAND.replay && $('recLbl').textContent === 'Record 15s',
+  'after the render the page is where the take left it: ' + JSON.stringify(back));
+const card = $('results').lastChild;
+check($('results').children.length === cards0 + 1 && /0:04 .* frame by frame$/.test(card.querySelector('small').textContent), 'the clip is listed: ' + card.querySelector('small').textContent);
+click(Array.prototype.find.call($('caps').children, b => b.dataset.v === 'Instant'));
+click($('clips').children[1]);
+check($('recLbl').textContent === 'Render 3 clips · 15s', 'Instant renders without a take: ' + $('recLbl').textContent);
+drawn = 0; click($('recBtn'));
+for (let i = 0; i < 1500 && (REC.phase() || !i); i++) await tick();
+check(drawn === 360 && $('results').children.length === cards0 + 4 && !MS.G.exact, `three clips rendered straight away: ${drawn} frames, ${$('results').children.length - cards0 - 1} new clips`);
+click($('clips').children[0]); click(Array.prototype.find.call($('caps').children, b => b.dataset.v === 'Perform'));
+REC.exact(null); REC.len(0);
 check(errors.length === 0, 'no runtime errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 console.log(failures ? failures + ' check(s) failed' : 'all checks passed');
 process.exit(failures ? 1 : 0);

@@ -6,12 +6,13 @@
 // Pump is the only place the kick or bass moves zoom and brightness, so Pump Off means no pumping.
 import { A, S, V, P, U, G, BEAT, PUMP, WV, WAVE_N, HAND } from './state.js';
 import { KEYS, HOLO, WAVE, VHS, PUMP_LENGTHS, ECHO_RATES } from './config.js';
+import { RNG } from './rng.js';
 
 const clamp = (v, a = 0, b = 1) => v < a ? a : (v > b ? b : v);
-const rnd = (a, b) => a + Math.random() * (b - a);
+const rnd = (a, b) => a + RNG.hits.next() * (b - a);
 
 export function reactKick() {
-  const dir = Math.random() < .5 ? -1 : 1;
+  const dir = RNG.hits.next() < .5 ? -1 : 1;
   S.rotV += dir * V.punch * V.beat * .9 * (Math.abs(V.spin) + .15);
   S.poke = [rnd(-.25, .25), rnd(-.35, .35), 0];
   S.pumpT = 0;
@@ -42,8 +43,8 @@ function journeyArc() {
 }
 
 export function reactSnare() {
-  S.sliceSeed = Math.random() * 100;
-  if (G.dir === 'Original') S.hueKick += (Math.random() < .5 ? -1 : 1) * V.color * .25 * V.beat;
+  S.sliceSeed = RNG.hits.next() * 100;
+  if (G.dir === 'Original') S.hueKick += (RNG.hits.next() < .5 ? -1 : 1) * V.color * .25 * V.beat;
   else S.palTarget += .25 * clamp(V.color * 2) * Math.min(1, V.beat + .2);
 }
 
