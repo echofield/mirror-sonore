@@ -197,7 +197,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .check{display:flex;gap:10px;align-items:center;min-height:36px;font-size:13.5px;cursor:pointer}
 .check input{width:16px;height:16px;accent-color:var(--blue)}
 .pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
-.handbox{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.handbox{padding-top:12px;border-top:1px solid var(--line)}
 .tripdesc{margin:0;font-family:var(--f-voice);font-size:17px;line-height:1.35;min-height:2.7em;text-wrap:pretty}
 .autorow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
 
@@ -453,22 +453,22 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
 
     <section class="sec" data-tab="look">
       <h2 class="lab">Look</h2>
-      <div class="handbox autorow">
-        <button class="switch" id="latchT2" type="button" aria-pressed="false"><i></i>Latch</button>
-        <p class="note">Play the picture with your hands. Drag on it: sideways turns it, up and down zooms. Two fingers set trails and warp. Let go and it comes back; with Latch it stays.</p>
-      </div>
-      <div class="pumpbox">
-        <div class="opt"><span>Pump</span><div class="seg sm" id="pumpStyle" role="group" aria-label="Pump style"></div></div>
-        <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
-        <p class="note" id="pumpNote"></p>
-      </div>
       <div class="modegrid" id="modes" role="group" aria-label="Mode"></div>
       <div class="fader" id="foldRow">
         <label for="segIn">Folds</label>
         <input id="segIn" type="range" min="2" max="16" step="1">
         <output id="segOut" for="segIn"></output>
       </div>
+      <div class="pumpbox">
+        <div class="opt"><span>Pump</span><div class="seg sm" id="pumpStyle" role="group" aria-label="Pump style"></div></div>
+        <div class="opt"><span>Pump length</span><div class="seg sm" id="pumpLen" role="group" aria-label="Pump length in notes"></div></div>
+        <p class="note" id="pumpNote"></p>
+      </div>
       <div class="faders" id="feel"></div>
+      <div class="handbox autorow">
+        <button class="switch" id="latchT2" type="button" aria-pressed="false"><i></i>Latch</button>
+        <p class="note">Play the picture with your hands. Drag on it: sideways turns it, up and down zooms. Two fingers set trails and warp. Let go and it comes back; with Latch it stays.</p>
+      </div>
     </section>
 
     <section class="sec" data-tab="color">

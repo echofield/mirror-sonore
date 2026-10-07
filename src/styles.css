@@ -185,7 +185,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .check{display:flex;gap:10px;align-items:center;min-height:36px;font-size:13.5px;cursor:pointer}
 .check input{width:16px;height:16px;accent-color:var(--blue)}
 .pumpbox{display:grid;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
-.handbox{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.handbox{padding-top:12px;border-top:1px solid var(--line)}
 .tripdesc{margin:0;font-family:var(--f-voice);font-size:17px;line-height:1.35;min-height:2.7em;text-wrap:pretty}
 .autorow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center}
 
