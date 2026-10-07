@@ -1,5 +1,5 @@
 // DOM: builds the controls, keeps them in sync with state, phone tabs, full screen, results list.
-import { MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
+import { MODES, MARKED_MODES, FOLD_MODES, HOLO, DIRS, MACROS, FEEL, TEX, FOIL, FORMATS, QUALS, LENS, CLIPS, BARS, TRANSITIONS, PUMP_STYLES, PUMP_LENGTHS, TRIPS, TRIP_NAMES, TRIPFX, ECHO_RATES } from './config.js';
 import { P, G, A, V, BEAT, AUTO, OUT, SESSION, PUMP, HAND } from './state.js';
 import { initHands, handKey, wasDrag, setLatch, centreHands } from './hands.js';
 import { setDirection, setMode, shuffle, setAuto, setTrip } from './auto.js';
@@ -41,8 +41,9 @@ export function initUI(handlers) {
   });
   Object.keys(PUMP_LENGTHS).forEach(l => addBtn(el.pumpLen, l, l, () => setPump(PUMP.style, l)));
   MODES.forEach((name, i) => {
-    addBtn(el.modes, i, name, () => setMode(i));
-    addBtn(el.miniModes, i, name, () => setMode(i));
+    const cls = MARKED_MODES.indexOf(i) >= 0 ? 'hot' : '';
+    addBtn(el.modes, i, name, () => setMode(i), cls);
+    addBtn(el.miniModes, i, name, () => setMode(i), cls);
   });
 
   buildFaders(el.macros, MACROS, 'macro');

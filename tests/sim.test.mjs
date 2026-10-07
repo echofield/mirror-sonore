@@ -166,6 +166,8 @@ check(Math.max(...wv.hist) > .3, 'Wave: kicks travel through the level history (
 const specPeak = Math.max(...Array.from({ length: 128 }, (_, i) => wv.tex[i * 4]));
 check(specPeak > 60 && wv.tex[64 * 4 + 3] === 255, 'Wave: the spectrum stands in the picture (peak ' + specPeak + ' of 255)');
 
+check(['modes', 'miniModes'].every(id => Array.prototype.find.call($(id).children, b => b.textContent === 'Wave').classList.contains('hot')), 'Wave is marked in both mode pickers');
+
 // VHS: the mode brings the tape with it; the Tape fader lays it over any other mode
 click(Array.prototype.find.call($('modes').children, b => b.textContent === 'VHS')); await run(.5);
 check($('lookBadge').textContent.includes('VHS') && w.__ms.U.tape >= .85, 'VHS mode plays the picture through the tape (tape ' + w.__ms.U.tape.toFixed(2) + ')');

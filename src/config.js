@@ -7,6 +7,8 @@ export const FOLD_MODES = [1, 2, 6, 7];
 export const HOLO = 4;
 export const WAVE = 7;
 export const VHS = 8;
+// Modes drawn in red in the pickers so they are easy to find. Empty the list to take the red off.
+export const MARKED_MODES = [7];
 // Modes Auto never picks (no direction or trip lists them). Choosing one by hand sets this starting look.
 export const HAND_MODES = {
   7: { warp: .55, spin: .22, zoom: 1, trails: .4, seg: 6 },

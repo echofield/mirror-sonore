@@ -25,6 +25,7 @@
   --line:#CFCFC9;
   --blue:#1F3BE2;
   --rust:#B5420F;
+  --red:#D92D20;
   --on:#FFFFFF;
   --hover:rgba(14,15,17,.06);
   /* on the picture: the same in both themes */
@@ -43,9 +44,9 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){--paper:#0E0F11;--well:#17181C;--ink:#F4F4F2;--ink-2:#C6C8CE;--ink-3:#9A9DA6;--line:#2E3036;--blue:#9AA7FF;--rust:#F0905F;--on:#0E0F11;--hover:rgba(244,244,242,.08);color-scheme:dark}
+  :root:not([data-theme="light"]){--paper:#0E0F11;--well:#17181C;--ink:#F4F4F2;--ink-2:#C6C8CE;--ink-3:#9A9DA6;--line:#2E3036;--blue:#9AA7FF;--rust:#F0905F;--red:#FF6B5E;--on:#0E0F11;--hover:rgba(244,244,242,.08);color-scheme:dark}
 }
-:root[data-theme="dark"]{--paper:#0E0F11;--well:#17181C;--ink:#F4F4F2;--ink-2:#C6C8CE;--ink-3:#9A9DA6;--line:#2E3036;--blue:#9AA7FF;--rust:#F0905F;--on:#0E0F11;--hover:rgba(244,244,242,.08);color-scheme:dark}
+:root[data-theme="dark"]{--paper:#0E0F11;--well:#17181C;--ink:#F4F4F2;--ink-2:#C6C8CE;--ink-3:#9A9DA6;--line:#2E3036;--blue:#9AA7FF;--rust:#F0905F;--red:#FF6B5E;--on:#0E0F11;--hover:rgba(244,244,242,.08);color-scheme:dark}
 
 *,*::before,*::after{box-sizing:border-box}
 html,body{background:var(--paper);color:var(--ink)}
@@ -185,6 +186,8 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .seg button:last-child{border-right:0}
 .seg button[aria-pressed="true"]{color:var(--ink);font-weight:500;box-shadow:inset 0 0 0 2px var(--blue)}
 .modegrid{display:flex;flex-wrap:wrap;gap:6px}
+.modegrid button.hot,.mini > button.hot{color:var(--red);border-color:var(--red)}
+.modegrid button.hot[aria-pressed="true"],.mini > button.hot[aria-pressed="true"]{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
 .modegrid button{flex:1 1 30%;min-height:36px;border:1px solid var(--line);background:var(--well);border-radius:2px;padding:0 6px;font-size:13.5px;font-weight:500}
 
 .faders{display:grid}
@@ -229,6 +232,13 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 .toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));width:max-content;max-width:min(92vw,460px);display:flex;align-items:center;gap:6px;padding:10px 14px;border-radius:2px;background:var(--ink);color:var(--on);font-size:14px}
 .toast button{flex:none;min-height:36px;margin-block:-6px;margin-right:-6px;padding:0 10px;border:0;background:none;color:inherit;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;text-decoration:underline;text-underline-offset:4px}
 .err{padding:16px;margin:12px;border:1px solid #F0905F;border-radius:2px;color:var(--pic-fg)}
+
+/* ---------- computer: the modes sit with the live controls, next to the picture ---------- */
+@media (min-width:881px){
+  body:not(.immersive) #miniModes{display:flex;flex-wrap:wrap;gap:6px}
+  body:not(.immersive) #miniModes::before{content:"Mode";flex-basis:100%;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+  body:not(.immersive) #miniModes > button{flex:1 1 28%;justify-content:center;padding:0 6px;font-size:13.5px}
+}
 
 /* ---------- wide screen: picture, live controls and rack side by side ---------- */
 @media (min-width:1180px){
@@ -286,7 +296,7 @@ input[type=range]:disabled{opacity:.4;cursor:not-allowed}
 
 /* ---------- full screen: the same controls, in negative over the picture ---------- */
 body.immersive{overflow:hidden}
-body.immersive .stage{--paper:#0E0F11;--well:rgba(23,24,28,.72);--ink:#F4F4F2;--ink-2:#C6C8CE;--ink-3:#B4B7BF;--line:rgba(244,244,242,.3);--blue:#9AA7FF;--rust:#F0905F;--on:#0E0F11;--hover:rgba(244,244,242,.1);
+body.immersive .stage{--paper:#0E0F11;--well:rgba(23,24,28,.72);--ink:#F4F4F2;--ink-2:#C6C8CE;--ink-3:#B4B7BF;--line:rgba(244,244,242,.3);--blue:#9AA7FF;--rust:#F0905F;--red:#FF6B5E;--on:#0E0F11;--hover:rgba(244,244,242,.1);
   position:fixed;inset:0;z-index:40;margin:0;padding:0;border:0;background:var(--pic);color:var(--ink);display:block;top:0}
 body.immersive .monitor{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:auto;max-width:none;height:min(100vh,calc(100vw / var(--arn)));border-radius:0;box-shadow:none;cursor:default}
 @supports (height:1dvh){ body.immersive .monitor{height:min(100dvh,calc(100vw / var(--arn)))} }
@@ -506,6 +516,7 @@ body.immersive .recbadge{bottom:auto;top:calc(14px + env(safe-area-inset-top,0px
   var HOLO = 4;
   var WAVE = 7;
   var VHS = 8;
+  var MARKED_MODES = [7];
   var HAND_MODES = {
     7: { warp: 0.55, spin: 0.22, zoom: 1, trails: 0.4, seg: 6 },
     8: { warp: 0.12, spin: 0, zoom: 1.05, trails: 0.3 }
@@ -2226,8 +2237,9 @@ void main(){ gl_FragColor = texture2D(uTex, gl_FragCoord.xy/uRes); }
     });
     Object.keys(PUMP_LENGTHS).forEach((l) => addBtn(el.pumpLen, l, l, () => setPump(PUMP.style, l)));
     MODES.forEach((name, i) => {
-      addBtn(el.modes, i, name, () => setMode(i));
-      addBtn(el.miniModes, i, name, () => setMode(i));
+      const cls = MARKED_MODES.indexOf(i) >= 0 ? "hot" : "";
+      addBtn(el.modes, i, name, () => setMode(i), cls);
+      addBtn(el.miniModes, i, name, () => setMode(i), cls);
     });
     buildFaders(el.macros, MACROS, "macro");
     buildFaders(el.feel, FEEL, "look");
