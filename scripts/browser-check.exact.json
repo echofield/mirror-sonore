@@ -1,0 +1,7 @@
+[
+  { "js": "new Promise(r => { const t0 = Date.now(); (function w() { if (/ready|failed/.test(window.__ms.SONG.state) || Date.now() - t0 > 15000) r(window.__ms.SONG.state); else setTimeout(w, 50); })(); })", "wait": 1200 },
+  { "js": "JSON.stringify({ spec: document.getElementById('spec').textContent, captureOffered: !document.getElementById('capRow').hidden, bpm: window.__ms.SONG.score.bpm, bar: +window.__ms.SONG.score.bar.toFixed(3) })" },
+  { "js": "window.__ms.rec.len(3); Array.prototype.find.call(document.getElementById('caps').children, b => b.dataset.v === 'Instant').click(); document.getElementById('recBtn').click(); window.__ms.rec.phase()", "wait": 300 },
+  { "js": "new Promise(r => { const t0 = performance.now(); (function w() { if (!window.__ms.rec.phase() || performance.now() - t0 > 90000) r((document.querySelector('#results .result small') || {}).textContent); else setTimeout(w, 100); })(); })" },
+  { "save": "(async () => { const v = document.querySelector('#results .result video'); const buf = new Uint8Array(await (await fetch(v.src)).arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 32768) s += String.fromCharCode.apply(null, buf.subarray(i, i + 32768)); return btoa(s); })()", "file": "tests/out/exact-clip.mp4" }
+]
